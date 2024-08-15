@@ -20,4 +20,4 @@ python3 main.py playlist.bin -d
 ```
 Cette commande ne modifie pas votre playlist. Elle demande une confirmation avant toute modification. Dans tous les cas, une sauvegarde est effectuée pour éviter tout problème.
 
-
+Une fois la playlist mise à jour, les nouveaux sons apparaitront tous dans le dossier *Upload* de la Merlin.
