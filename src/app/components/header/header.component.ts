@@ -1,0 +1,38 @@
+import { Component, inject } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { PlaylistService } from '../../services/playlist.service';
+import { FileService } from '../../services/file.service';
+
+@Component({
+  selector: 'app-header',
+  standalone: true,
+  imports: [CommonModule],
+  templateUrl: './header.component.html',
+  styleUrl: './header.component.css'
+})
+export class HeaderComponent {
+  protected playlistService = inject(PlaylistService);
+  protected fileService = inject(FileService);
+
+  async onImport(): Promise<void> {
+    await this.fileService.openFile();
+  }
+
+  async onExport(): Promise<void> {
+    await this.fileService.saveFile();
+  }
+
+  onCreatePlaylist(): void {
+    this.playlistService.createEmptyPlaylist();
+  }
+
+  onNewFolder(): void {
+    const hierarchy = this.playlistService.hierarchy();
+
+    if (!hierarchy) {
+      return;
+    }
+
+    this.playlistService.createFolder(hierarchy.id, 'Nouveau dossier');
+  }
+}

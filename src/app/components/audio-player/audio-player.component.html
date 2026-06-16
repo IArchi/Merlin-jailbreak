@@ -1,0 +1,46 @@
+<div class="audio-player" [class.compact]="compact">
+  @if (error()) {
+    <div class="error-state">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="15" y1="9" x2="9" y2="15"/>
+        <line x1="9" y1="9" x2="15" y2="15"/>
+      </svg>
+      <span>{{ error() }}</span>
+    </div>
+  } @else {
+    <button 
+      class="play-btn"
+      [class.playing]="isPlaying()"
+      [disabled]="isLoading()"
+      (click)="togglePlay()"
+    >
+      @if (isLoading()) {
+        <svg class="spinner" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"/>
+        </svg>
+      } @else if (isPlaying()) {
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+          <rect x="6" y="4" width="4" height="16" rx="1"/>
+          <rect x="14" y="4" width="4" height="16" rx="1"/>
+        </svg>
+      } @else {
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+          <polygon points="5,3 19,12 5,21"/>
+        </svg>
+      }
+    </button>
+
+    <div class="progress-container" (click)="seek($event)">
+      <div class="progress-bar">
+        <div class="progress-fill" [style.width.%]="progressPercent"></div>
+      </div>
+    </div>
+
+    <div class="time-display">
+      <span class="current-time">{{ formatTime(currentTime()) }}</span>
+      <span class="separator">/</span>
+      <span class="duration">{{ formatTime(duration()) }}</span>
+    </div>
+  }
+</div>

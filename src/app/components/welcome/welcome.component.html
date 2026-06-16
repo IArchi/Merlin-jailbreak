@@ -1,0 +1,53 @@
+<div class="welcome-container">
+  <section class="hero card">
+    <div class="hero-copy">
+      <div class="eyebrow">Playlist editor</div>
+      <h1 class="title">Merlin JailBreak</h1>
+      <p class="subtitle">Créez une playlist vide ou importez un fichier existant pour organiser votre Merlin MusicBox.</p>
+
+      <div class="actions">
+        <button class="btn btn-primary btn-lg" (click)="onCreatePlaylist()">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+            <line x1="12" y1="10" x2="12" y2="16"/>
+            <line x1="9" y1="13" x2="15" y2="13"/>
+          </svg>
+          Créer une playlist vide
+        </button>
+
+        <button class="btn btn-secondary btn-lg" (click)="onImport()">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7,10 12,15 17,10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Importer un fichier playlist.bin
+        </button>
+      </div>
+    </div>
+
+    <div 
+      class="drop-zone"
+      [class.drag-over]="isDragOver"
+      (dragover)="onDragOver($event)"
+      (dragleave)="onDragLeave($event)"
+      (drop)="onDrop($event)"
+    >
+      <div class="drop-zone-content">
+        <div class="icon-container">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="12" cy="12" r="10"/>
+            <polygon points="10,8 16,12 10,16" fill="currentColor"/>
+          </svg>
+        </div>
+
+        <h2 class="drop-zone-title">Import rapide</h2>
+        <p class="drop-zone-text">Glissez-déposez votre fichier <code>.bin</code> dans cette zone pour ouvrir une playlist existante.</p>
+
+        <p class="hint">
+          Compatible avec les playlists exportées depuis Merlin MusicBox
+        </p>
+      </div>
+    </div>
+  </section>
+</div>

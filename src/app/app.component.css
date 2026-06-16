@@ -1,0 +1,35 @@
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: transparent;
+}
+
+.app-content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 var(--spacing-lg) var(--spacing-lg);
+  gap: var(--spacing-lg);
+}
+
+app-sidebar {
+  display: flex;
+  min-height: 0;
+}
+
+app-editor-panel {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+@media (max-width: 768px) {
+  .app-content {
+    flex-direction: column;
+    padding: 0 var(--spacing-md) var(--spacing-md);
+    gap: var(--spacing-md);
+  }
+}

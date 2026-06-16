@@ -1,0 +1,395 @@
+/* Global Styles - Merlin JailBreak */
+:root {
+  /* App palette */
+  --bg-app: #c6ecdc;
+  --bg-app-rgb: 198, 236, 220;
+  --front-app: #003b5c;
+  --front-app-rgb: 0, 59, 92;
+
+  --primary-50: #eefaf5;
+  --primary-100: #def5eb;
+  --primary-200: #bfe9d8;
+  --primary-300: #9ad8c0;
+  --primary-400: #73c3a4;
+  --primary-500: #3fa382;
+  --primary-500-rgb: 63, 163, 130;
+  --primary-600: #2d8066;
+  --primary-700: #1f5e4b;
+  --primary-800: #123d31;
+  --primary-900: #0a241d;
+
+  --accent-50: #e8f2f8;
+  --accent-100: #c7dcea;
+  --accent-200: #9ebfd6;
+  --accent-300: #739fbd;
+  --accent-400: #4f83a6;
+  --accent-500: #2c678f;
+  --accent-500-rgb: 44, 103, 143;
+  --accent-600: #145372;
+  --accent-700: #003b5c;
+  --accent-800: #012c44;
+  --accent-900: #021c2b;
+
+  --neutral-50: #f7fbfa;
+  --neutral-100: #edf5f2;
+  --neutral-200: #d5e1de;
+  --neutral-300: #b4c7c2;
+  --neutral-400: #8fa4a0;
+  --neutral-500: #6f8582;
+  --neutral-600: #516663;
+  --neutral-700: #36504f;
+  --neutral-800: #1d3a45;
+  --neutral-900: #0b2435;
+  
+  /* Semantic colors */
+  --success: #4caf50;
+  --warning: #ff9800;
+  --error: #f44336;
+  --info: #2196f3;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  
+  /* Border radius */
+  --radius-sm: 0.375rem;
+  --radius: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-full: 9999px;
+  
+  /* Spacing */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  --spacing-2xl: 3rem;
+  
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition: 200ms ease;
+  --transition-slow: 300ms ease;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--front-app);
+  background-color: var(--bg-app);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, rgba(var(--front-app-rgb), 0.12), transparent 35%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0)),
+    var(--bg-app);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--neutral-100);
+  border-radius: var(--radius);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--neutral-300);
+  border-radius: var(--radius);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--neutral-400);
+}
+
+/* Focus styles */
+:focus-visible {
+  outline: 2px solid var(--primary-500);
+  outline-offset: 2px;
+}
+
+/* Button base styles */
+button {
+  font-family: inherit;
+  font-size: inherit;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Input base styles */
+input, textarea {
+  font-family: inherit;
+  font-size: inherit;
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius);
+  padding: var(--spacing-sm) var(--spacing-md);
+  transition: all var(--transition);
+}
+
+input:focus, textarea:focus {
+  border-color: var(--primary-500);
+  box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+}
+
+/* Card styles */
+.card {
+  background: white;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: var(--spacing-lg);
+}
+
+.card-hover:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+/* Button variants */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius);
+  font-weight: 500;
+  transition: all var(--transition);
+}
+
+.btn-primary {
+  background: var(--front-app);
+  color: white;
+  box-shadow: 0 12px 24px rgba(var(--front-app-rgb), 0.18);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-800);
+}
+
+.btn-secondary {
+  background: rgba(var(--front-app-rgb), 0.08);
+  color: var(--front-app);
+  border: 1px solid rgba(var(--front-app-rgb), 0.12);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(var(--front-app-rgb), 0.14);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--front-app);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: rgba(var(--front-app-rgb), 0.08);
+}
+
+.btn-icon {
+  padding: var(--spacing-sm);
+  border-radius: var(--radius);
+}
+
+.btn-icon:hover:not(:disabled) {
+  background: rgba(var(--front-app-rgb), 0.08);
+}
+
+/* Utility classes */
+.text-primary {
+  color: var(--front-app);
+}
+
+.text-muted {
+  color: var(--neutral-500);
+}
+
+.text-sm {
+  font-size: 0.875rem;
+}
+
+.text-xs {
+  font-size: 0.75rem;
+}
+
+.font-medium {
+  font-weight: 500;
+}
+
+.font-semibold {
+  font-weight: 600;
+}
+
+/* Drag and drop styles */
+.drag-over {
+  background-color: var(--primary-50) !important;
+  border: 2px dashed var(--primary-400) !important;
+}
+
+.dragging {
+  opacity: 0.5;
+}
+
+.drop-indicator {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: var(--primary-500);
+  pointer-events: none;
+}
+
+app-editor-panel .panel-header-title-static {
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+  padding: 0 var(--spacing-md);
+  background: linear-gradient(135deg, rgba(var(--front-app-rgb), 0.14), rgba(var(--front-app-rgb), 0.08));
+  border: 1px solid rgba(var(--front-app-rgb), 0.16);
+  border-radius: var(--radius-lg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+app-editor-panel .panel-header-title-static .title-text {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+app-editor-panel .child-body {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+app-editor-panel .child-body app-audio-player {
+  min-width: 0;
+}
+
+app-editor-panel .panel-footer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-top: 1px solid rgba(var(--front-app-rgb), 0.08);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(10px);
+}
+
+@media (max-width: 768px) {
+  app-editor-panel .child-main {
+    width: 100%;
+  }
+}
+
+.drop-indicator::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--primary-500);
+}
+
+/* Animation utilities */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { 
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn var(--transition) ease-out;
+}
+
+.animate-slide-in {
+  animation: slideIn var(--transition) ease-out;
+}
+
+.editor-panel .section-hint {
+  margin: 4px 0 0;
+  color: rgba(var(--front-app-rgb), 0.55);
+  font-size: 0.875rem;
+}
+
+.editor-panel .child-badge {
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: rgba(var(--front-app-rgb), 0.08);
+  color: rgba(var(--front-app-rgb), 0.75);
+  font-size: 0.72rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.editor-panel .child-badge.is-folder {
+  background: rgba(var(--primary-500-rgb, 63, 163, 130), 0.18);
+  color: var(--primary-700);
+}
+
+.editor-panel .child-badge.is-audio {
+  background: rgba(var(--accent-500-rgb, 44, 103, 143), 0.16);
+  color: var(--accent-700);
+}
+
+.editor-panel .child-delete {
+  color: var(--error);
+}
+
+.editor-panel .children-empty-state {
+  padding: var(--spacing-lg);
+  border: 1px dashed rgba(var(--front-app-rgb), 0.18);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.editor-panel .empty-text {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--front-app);
+  margin: 0;
+}
+
+.editor-panel .empty-hint {
+  font-size: 0.875rem;
+  color: rgba(var(--front-app-rgb), 0.55);
+  margin: var(--spacing-xs) 0 0;
+}

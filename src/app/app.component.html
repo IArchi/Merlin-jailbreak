@@ -1,0 +1,12 @@
+<div class="app-container">
+  <app-header />
+  
+  @if (playlistService.hierarchy()) {
+    <div class="app-content">
+      <app-sidebar />
+      <app-editor-panel />
+    </div>
+  } @else {
+    <app-welcome />
+  }
+</div>

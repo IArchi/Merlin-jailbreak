@@ -1,0 +1,187 @@
+.thumbnail-editor {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.58);
+  border: 2px dashed rgba(var(--front-app-rgb), 0.16);
+  transition: all var(--transition);
+}
+
+.thumbnail-editor.compact {
+  width: 72px;
+  height: 72px;
+  border-width: 1px;
+  border-radius: var(--radius);
+}
+
+.thumbnail-editor.drag-over {
+  border-color: rgba(var(--front-app-rgb), 0.3);
+  background: rgba(var(--bg-app-rgb), 0.86);
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+  color: var(--primary-500);
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.image-preview {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.image-preview.is-clickable {
+  cursor: pointer;
+}
+
+.image-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.image-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  background: rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+
+.image-preview:hover .image-overlay {
+  opacity: 1;
+}
+
+.thumbnail-editor.compact .image-overlay {
+  gap: var(--spacing-xs);
+  justify-content: flex-end;
+  align-items: flex-start;
+  padding: 6px;
+}
+
+.thumbnail-editor.compact .image-overlay .btn-icon {
+  padding: 6px;
+}
+
+.thumbnail-editor.compact .image-overlay svg {
+  width: 14px;
+  height: 14px;
+}
+
+.thumbnail-editor.compact .image-overlay .btn-danger {
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.image-overlay .btn-icon {
+  background: white;
+  color: var(--neutral-700);
+}
+
+.image-overlay .btn-icon:hover {
+  background: var(--neutral-100);
+}
+
+.image-overlay .btn-danger {
+  color: var(--error);
+}
+
+.image-overlay .btn-danger:hover {
+  background: var(--error);
+  color: white;
+}
+
+.empty-state {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  gap: var(--spacing-sm);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.empty-watermark {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(var(--front-app-rgb), 0.12);
+  pointer-events: none;
+}
+
+.empty-state.is-folder .empty-watermark {
+  color: rgba(var(--primary-500-rgb), 0.18);
+}
+
+.empty-state.is-audio .empty-watermark {
+  color: rgba(var(--accent-500-rgb), 0.16);
+}
+
+.empty-state > *:not(.empty-watermark) {
+  position: relative;
+  z-index: 1;
+}
+
+.empty-state:hover {
+  background: rgba(var(--bg-app-rgb), 0.78);
+  border-color: rgba(var(--front-app-rgb), 0.24);
+}
+
+.thumbnail-editor.compact .empty-state {
+  gap: 0;
+  padding: var(--spacing-xs);
+}
+
+.thumbnail-editor.compact .empty-watermark svg {
+  width: 36px;
+  height: 36px;
+}
+
+.thumbnail-editor.compact .empty-icon {
+  display: none;
+}
+
+.thumbnail-editor.compact .empty-text {
+  font-size: 0.7rem;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.empty-icon {
+  color: rgba(var(--front-app-rgb), 0.45);
+}
+
+.empty-text {
+  font-size: 0.875rem;
+  color: var(--front-app);
+  margin: 0;
+}
+
+.empty-hint {
+  font-size: 0.75rem;
+  color: rgba(var(--front-app-rgb), 0.52);
+  margin: 0;
+}

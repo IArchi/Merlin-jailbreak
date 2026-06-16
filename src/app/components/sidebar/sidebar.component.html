@@ -1,0 +1,48 @@
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="search-box">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input 
+        type="text" 
+        placeholder="Rechercher..."
+        [value]="searchQuery"
+        (input)="onSearch($event)"
+      />
+    </div>
+    
+    <button class="btn btn-icon" (click)="onCreateFolder()" title="Nouveau dossier">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        <line x1="12" y1="11" x2="12" y2="17"/>
+        <line x1="9" y1="14" x2="15" y2="14"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="sidebar-content">
+    @if (playlistService.hierarchy(); as hierarchy) {
+      <div class="tree-container">
+        <app-tree-node 
+          [item]="hierarchy"
+          [level]="0"
+          (itemSelected)="onItemSelected($event)"
+          (createSubfolder)="onCreateSubfolder($event)"
+        />
+      </div>
+    }
+  </div>
+
+  <div class="sidebar-footer">
+    <div class="stats">
+      <span class="stat">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        </svg>
+        {{ playlistService.foldersCount() }} dossiers / {{ playlistService.songsCount() }} mp3
+      </span>
+    </div>
+  </div>
+</aside>

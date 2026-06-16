@@ -1,0 +1,244 @@
+<div class="editor-panel">
+  @if (selectedItem) {
+    <div class="panel-header">
+      <div class="panel-header-main" [class.is-folder]="isContainer">
+        @if (isContainer) {
+          @if (!isRoot) {
+            <app-thumbnail-editor 
+              [imagePath]="selectedItem.imagepath"
+              [itemId]="selectedItem.id"
+              [compact]="true"
+              [alt]="selectedItem.title"
+            />
+          }
+
+          <div class="panel-header-meta">
+            <div class="item-type-badge" [class.folder]="isContainer" [class.song]="isSong">
+              {{ itemTypeLabel }}
+            </div>
+
+            @if (editingTitle()) {
+              <div class="title-edit panel-header-title-edit">
+                <input 
+                  type="text"
+                  class="title-input"
+                  [(ngModel)]="titleValue"
+                  (keydown)="onTitleKeydown($event)"
+                  autofocus
+                />
+                <button class="btn btn-primary btn-sm" (click)="saveTitle()">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="20,6 9,17 4,12"/>
+                  </svg>
+                </button>
+                <button class="btn btn-ghost btn-sm" (click)="cancelEditingTitle()">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+            } @else if (isRoot) {
+              <div class="panel-header-title panel-header-title-static">
+                <span class="title-text">{{ selectedItem.title }}</span>
+              </div>
+            } @else {
+              <div class="title-display panel-header-title" (click)="startEditingTitle()">
+                <span class="title-text">{{ selectedItem.title }}</span>
+                <button class="btn btn-icon btn-sm">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                </button>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="item-type-badge" [class.folder]="isContainer" [class.song]="isSong">
+            {{ itemTypeLabel }}
+          </div>
+        }
+      </div>
+      @if (!isRoot) {
+        <button class="btn btn-icon btn-danger" (click)="onDelete()" title="Supprimer">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3,6 5,6 21,6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+        </button>
+      }
+    </div>
+
+    <div class="panel-content">
+      <!-- Title Section -->
+      @if (!isContainer) {
+        <div class="section">
+          <label class="section-label">Titre</label>
+          @if (editingTitle()) {
+            <div class="title-edit">
+              <input 
+                type="text"
+                class="title-input"
+                [(ngModel)]="titleValue"
+                (keydown)="onTitleKeydown($event)"
+                autofocus
+              />
+              <button class="btn btn-primary btn-sm" (click)="saveTitle()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20,6 9,17 4,12"/>
+                </svg>
+              </button>
+              <button class="btn btn-ghost btn-sm" (click)="cancelEditingTitle()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          } @else {
+            <div class="title-display" (click)="startEditingTitle()">
+              <span class="title-text">{{ selectedItem.title }}</span>
+              <button class="btn btn-icon btn-sm">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+              </button>
+            </div>
+          }
+        </div>
+
+        <div class="section">
+          <label class="section-label">Vignette</label>
+          <app-thumbnail-editor 
+            [imagePath]="selectedItem.imagepath"
+            [itemId]="selectedItem.id"
+            [alt]="selectedItem.title"
+          />
+        </div>
+      }
+
+      @if (isContainer) {
+        <div class="section children-section">
+          <div class="section-header">
+            <div>
+              <label class="section-label">Contenu du dossier</label>
+              <p class="section-hint">Importez des MP3, ajoutez leur vignette et réorganisez-les.</p>
+            </div>
+
+            <button class="btn btn-ghost btn-sm" (click)="onCreateSubfolder()" title="Créer un sous-dossier">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                <line x1="12" y1="11" x2="12" y2="17"/>
+                <line x1="9" y1="14" x2="15" y2="14"/>
+              </svg>
+              <span>Sous-dossier</span>
+            </button>
+          </div>
+
+          <div class="children-list">
+            @if (hasFolderChildren) {
+              @for (child of folderChildren; track child.id; let first = $first; let last = $last) {
+                <div class="child-row" [class.is-selected]="isChildSelected(child)">
+                  <div class="child-body">
+                    <div class="child-main" (click)="!isEditingChild(child) && onSelectChild(child)">
+                      <app-thumbnail-editor
+                        [imagePath]="child.imagepath"
+                        [itemId]="child.id"
+                        [compact]="true"
+                        [alt]="child.title"
+                      />
+
+                      <div class="child-meta">
+                        <div class="child-title-row">
+                          @if (isEditingChild(child)) {
+                            <input
+                              type="text"
+                              class="child-title-input"
+                              [(ngModel)]="childTitleValue"
+                              (click)="$event.stopPropagation()"
+                              (mousedown)="$event.stopPropagation()"
+                              (keydown)="onChildTitleKeydown($event, child)"
+                              (blur)="saveChildTitle(child)"
+                              autofocus
+                            />
+                          } @else {
+                            <span class="child-title">{{ child.title }}</span>
+                          }
+                          <span class="child-badge" [class]="'child-badge ' + getChildBadgeClass(child)">{{ getChildTypeLabel(child) }}</span>
+                        </div>
+                        <span class="child-subtitle">{{ getChildSubtitle(child) }}</span>
+                      </div>
+                    </div>
+
+                    @if (isAudioChild(child) && child.soundpath) {
+                      <app-audio-player [soundpath]="child.soundpath" [compact]="true" />
+                    }
+                  </div>
+
+                  <div class="child-actions">
+                    <button class="btn btn-ghost btn-icon btn-sm" (click)="onMoveChild(child, -1)" [disabled]="first" title="Monter">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="18,15 12,9 6,15"/>
+                      </svg>
+                    </button>
+                    <button class="btn btn-ghost btn-icon btn-sm" (click)="onMoveChild(child, 1)" [disabled]="last" title="Descendre">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6,9 12,15 18,9"/>
+                      </svg>
+                    </button>
+                    <button class="btn btn-ghost btn-icon btn-sm" (click)="startEditingChild(child)" title="Éditer">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                      </svg>
+                    </button>
+                    <button class="btn btn-ghost btn-icon btn-sm child-delete" (click)="onDeleteChild(child)" title="Supprimer">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3,6 5,6 21,6"/>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              }
+            } @else {
+              <div class="children-empty-state">
+                <p class="empty-text">Ce dossier est vide</p>
+                <p class="empty-hint">Importez un ou plusieurs MP3 pour commencer.</p>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+    </div>
+
+    @if (isContainer) {
+      <div class="panel-footer">
+        <button class="btn btn-primary" (click)="onImportAudio()" title="Importer des MP3">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17,8 12,3 7,8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <span>Importer des MP3</span>
+        </button>
+      </div>
+    }
+  } @else {
+    <div class="empty-panel">
+      <div class="empty-icon">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+          <line x1="9" y1="9" x2="9.01" y2="9"/>
+          <line x1="15" y1="9" x2="15.01" y2="9"/>
+        </svg>
+      </div>
+      <p class="empty-text">Sélectionnez un élément</p>
+      <p class="empty-hint">Cliquez sur un élément dans la liste pour voir ses détails</p>
+    </div>
+  }
+</div>
