@@ -161,7 +161,7 @@ export class EditorPanelComponent {
       return;
     }
 
-    this.playlistService.createFolder(parent.id, 'Nouveau dossier');
+    this.playlistService.createFolder(parent.id, 'NouveauDossier');
   }
 
   onSelectChild(child: PlaylistItem): void {

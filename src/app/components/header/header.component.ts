@@ -33,6 +33,6 @@ export class HeaderComponent {
       return;
     }
 
-    this.playlistService.createFolder(hierarchy.id, 'Nouveau dossier');
+    this.playlistService.createFolder(hierarchy.id, 'NouveauDossier');
   }
 }

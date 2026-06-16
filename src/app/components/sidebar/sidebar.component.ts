@@ -31,10 +31,10 @@ export class SidebarComponent {
     
     if (!hierarchy) return;
 
-    this.playlistService.createFolder(hierarchy.id, 'Nouveau dossier');
+    this.playlistService.createFolder(hierarchy.id, 'NouveauDossier');
   }
 
   onCreateSubfolder(item: PlaylistItem): void {
-    this.playlistService.createFolder(item.id, 'Nouveau dossier');
+    this.playlistService.createFolder(item.id, 'NouveauDossier');
   }
 }

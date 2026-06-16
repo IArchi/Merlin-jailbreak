@@ -5,6 +5,7 @@ import { PlaylistItem, PlaylistItemType, PlaylistState } from '../models/playlis
   providedIn: 'root'
 })
 export class PlaylistService {
+  private static readonly INVALID_TITLE_CHARS = /[ ._]/;
   private state = signal<PlaylistState>({
     items: [],
     hierarchy: null,
@@ -275,13 +276,18 @@ export class PlaylistService {
         return s;
       }
 
+      const sanitizedTitle = this.sanitizeTitle(newTitle);
+      if (!sanitizedTitle) {
+        return s;
+      }
+
       return {
         ...s,
         items: s.items.map(item => 
-          item.id === itemId ? { ...item, title: newTitle } : item
+          item.id === itemId ? { ...item, title: sanitizedTitle } : item
         ),
-        hierarchy: s.hierarchy ? this.updateInHierarchy(s.hierarchy, itemId, { title: newTitle }) : null,
-        selectedItem: s.selectedItem?.id === itemId ? { ...s.selectedItem, title: newTitle } : s.selectedItem,
+        hierarchy: s.hierarchy ? this.updateInHierarchy(s.hierarchy, itemId, { title: sanitizedTitle }) : null,
+        selectedItem: s.selectedItem?.id === itemId ? { ...s.selectedItem, title: sanitizedTitle } : s.selectedItem,
         isDirty: true
       };
     });
@@ -389,6 +395,11 @@ export class PlaylistService {
    * Create new folder
    */
   createFolder(parentId: number, title: string): void {
+    const sanitizedTitle = this.sanitizeTitle(title);
+    if (!sanitizedTitle) {
+      return;
+    }
+
     this.state.update(s => {
       const maxId = Math.max(...s.items.map(i => i.id), 0);
       const siblings = s.items.filter(i => i.parent_id === parentId);
@@ -404,7 +415,7 @@ export class PlaylistService {
         limit_time: 0,
         add_time: Math.floor(Date.now() / 1000),
         uuid: crypto.randomUUID(),
-        title,
+        title: sanitizedTitle,
         imagepath: '',
         soundpath: '',
         children: [],
@@ -444,9 +455,13 @@ export class PlaylistService {
       const nextOrder = siblings.length > 0 ? Math.max(...siblings.map(i => i.order)) + 1 : 0;
       const now = Math.floor(Date.now() / 1000);
 
-      const newSongs = filePaths.map((filePath, index) => {
+      const newSongs = filePaths.map<PlaylistItem | null>((filePath, index) => {
         const fileName = this.getFileName(filePath);
-        const title = fileName.replace(/\.mp3$/i, '');
+        const title = this.sanitizeTitle(fileName.replace(/\.mp3$/i, ''));
+
+        if (!title) {
+          return null;
+        }
 
         return {
           id: maxId + index + 1,
@@ -464,8 +479,12 @@ export class PlaylistService {
           children: [],
           expanded: false,
           selected: false
-        } satisfies PlaylistItem;
-      });
+        };
+      }).filter((song): song is PlaylistItem => song !== null);
+
+      if (newSongs.length === 0) {
+        return s;
+      }
 
       const items = s.items.map(item =>
         item.id === parentId && this.isContainerType(item.type)
@@ -612,6 +631,16 @@ export class PlaylistService {
 
   private getFileName(path: string): string {
     return path.split(/[/\\]/).pop() || path;
+  }
+
+  private sanitizeTitle(title: string): string | null {
+    const trimmedTitle = title.trim();
+
+    if (!trimmedTitle || PlaylistService.INVALID_TITLE_CHARS.test(trimmedTitle)) {
+      return null;
+    }
+
+    return trimmedTitle;
   }
 
   private expandAncestors(items: PlaylistItem[], itemId: number): PlaylistItem[] {
