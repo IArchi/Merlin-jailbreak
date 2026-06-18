@@ -23,6 +23,7 @@
                   type="text"
                   class="title-input"
                   [(ngModel)]="titleValue"
+                  (ngModelChange)="onTitleInput()"
                   (keydown)="onTitleKeydown($event)"
                   autofocus
                 />
@@ -81,6 +82,7 @@
                 type="text"
                 class="title-input"
                 [(ngModel)]="titleValue"
+                (ngModelChange)="onTitleInput()"
                 (keydown)="onTitleKeydown($event)"
                 autofocus
               />
@@ -157,6 +159,7 @@
                               type="text"
                               class="child-title-input"
                               [(ngModel)]="childTitleValue"
+                              (ngModelChange)="onChildTitleInput()"
                               (click)="$event.stopPropagation()"
                               (mousedown)="$event.stopPropagation()"
                               (keydown)="onChildTitleKeydown($event, child)"

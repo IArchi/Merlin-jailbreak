@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, inject, signal, OnChanges, OnDestroy, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { confirm } from '@tauri-apps/plugin-dialog';
+import { message } from '@tauri-apps/plugin-dialog';
 import { FileService } from '../../services/file.service';
 import { PlaylistService } from '../../services/playlist.service';
 import { PlaylistItemType } from '../../models/playlist-item.model';
@@ -64,6 +65,15 @@ export class ThumbnailEditorComponent {
       this.isLoading.set(true);
       const imagePath = await this.fileService.selectImage();
       if (imagePath) {
+        if (!this.fileService.isSupportedImagePath(imagePath)) {
+          await message('Le format de l\'image n\'est pas supporté. Utilisez un fichier jpg, jpeg, png ou bmp.', {
+            title: 'Image invalide',
+            kind: 'error',
+            okLabel: 'Fermer'
+          });
+          return;
+        }
+
         const workspacePath = await this.fileService.copyImageToWorkspace(this.itemId, imagePath);
         this.playlistService.updateItemImage(this.itemId, workspacePath);
         this.imageChanged.emit(workspacePath);

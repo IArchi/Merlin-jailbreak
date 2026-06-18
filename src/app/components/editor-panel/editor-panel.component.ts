@@ -87,13 +87,25 @@ export class EditorPanelComponent {
     return this.folderChildren.length > 0;
   }
 
+  get maxTitleBytes(): number {
+    return this.playlistService.maxUserTitleBytes;
+  }
+
+  get currentTitleBytes(): number {
+    return this.playlistService.getUtf8ByteLength(this.titleValue);
+  }
+
+  get currentChildTitleBytes(): number {
+    return this.playlistService.getUtf8ByteLength(this.childTitleValue);
+  }
+
   startEditingTitle(): void {
     if (this.isRoot) {
       return;
     }
 
     this.editingTitle.set(true);
-    this.titleValue = this.selectedItem?.title ?? '';
+    this.titleValue = this.playlistService.normalizeUserTitleInput(this.selectedItem?.title ?? '');
   }
 
   saveTitle(): void {
@@ -112,6 +124,10 @@ export class EditorPanelComponent {
   cancelEditingTitle(): void {
     this.titleValue = this.selectedItem?.title ?? '';
     this.editingTitle.set(false);
+  }
+
+  onTitleInput(): void {
+    this.titleValue = this.playlistService.normalizeUserTitleInput(this.titleValue);
   }
 
   onTitleKeydown(event: KeyboardEvent): void {
@@ -221,7 +237,11 @@ export class EditorPanelComponent {
 
   startEditingChild(child: PlaylistItem): void {
     this.editingChildId.set(child.id);
-    this.childTitleValue = child.title;
+    this.childTitleValue = this.playlistService.normalizeUserTitleInput(child.title);
+  }
+
+  onChildTitleInput(): void {
+    this.childTitleValue = this.playlistService.normalizeUserTitleInput(this.childTitleValue);
   }
 
   getChildTypeLabel(child: PlaylistItem): string {

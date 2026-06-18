@@ -1,6 +1,9 @@
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use image::codecs::jpeg::JpegEncoder;
+use image::imageops::FilterType;
+use image::{ColorType, ImageReader};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -26,6 +29,104 @@ fn is_supported_import_file(path: &Path) -> bool {
             )
         })
         .unwrap_or(false)
+}
+
+fn lowercase_extension(path: &Path) -> Option<String> {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_ascii_lowercase())
+}
+
+fn is_supported_image_extension(ext: &str) -> bool {
+    matches!(ext, "jpg" | "jpeg" | "png" | "bmp")
+}
+
+fn normalize_image_relative_path(path: &Path) -> PathBuf {
+    match lowercase_extension(path).as_deref() {
+        Some("jpg") => path.to_path_buf(),
+        Some("jpeg" | "png" | "bmp") => path.with_extension("jpg"),
+        _ => path.to_path_buf(),
+    }
+}
+
+fn should_convert_image_to_jpg(source: &Path, destination: &Path) -> bool {
+    matches!(lowercase_extension(destination).as_deref(), Some("jpg" | "jpeg"))
+        && !matches!(lowercase_extension(source).as_deref(), Some("jpg"))
+}
+
+fn validate_workspace_copy(source: &Path, destination: &Path) -> Result<(), String> {
+    let source_ext = lowercase_extension(source);
+
+    match lowercase_extension(destination).as_deref() {
+        Some("mp3") => {
+            if source_ext.as_deref() != Some("mp3") {
+                return Err(format!(
+                    "Le fichier audio \"{}\" doit être au format mp3.",
+                    source.display()
+                ));
+            }
+        }
+        Some("jpg" | "jpeg") => {
+            let is_supported = source_ext
+                .as_deref()
+                .map(is_supported_image_extension)
+                .unwrap_or(false);
+
+            if !is_supported {
+                return Err(format!(
+                    "L'image \"{}\" doit être au format jpg, jpeg, png ou bmp.",
+                    source.display()
+                ));
+            }
+        }
+        _ => {}
+    }
+
+    Ok(())
+}
+
+fn should_encode_image_as_jpg(source: &Path, destination: &Path) -> bool {
+    matches!(lowercase_extension(destination).as_deref(), Some("jpg" | "jpeg"))
+        && lowercase_extension(source)
+            .as_deref()
+            .map(is_supported_image_extension)
+            .unwrap_or(false)
+}
+
+fn encode_image_as_jpg(source: &Path, destination: &Path, resize_to_thumbnail: bool) -> Result<u64, String> {
+    let reader = ImageReader::open(source)
+        .map_err(|e| format!("Failed to open image {}: {}", source.display(), e))?;
+    let mut decoded = reader
+        .decode()
+        .map_err(|e| format!("Failed to decode image {}: {}", source.display(), e))?;
+
+    if resize_to_thumbnail {
+        decoded = decoded.resize_to_fill(128, 128, FilterType::Lanczos3);
+    }
+
+    let rgb = decoded.to_rgb8();
+
+    let mut encoded = Vec::new();
+    let mut encoder = JpegEncoder::new_with_quality(&mut encoded, 90);
+    encoder
+        .encode(&rgb, rgb.width(), rgb.height(), ColorType::Rgb8.into())
+        .map_err(|e| format!("Failed to encode image {} as jpg: {}", source.display(), e))?;
+
+    fs::write(destination, &encoded)
+        .map_err(|e| format!("Failed to write destination file {}: {}", destination.display(), e))?;
+
+    Ok(encoded.len() as u64)
+}
+
+fn copy_asset_to_path_with_options(source: &Path, destination: &Path, resize_to_thumbnail: bool) -> Result<u64, String> {
+    validate_workspace_copy(source, destination)?;
+
+    if should_encode_image_as_jpg(source, destination) {
+        return encode_image_as_jpg(source, destination, resize_to_thumbnail);
+    }
+
+    fs::copy(source, destination)
+        .map_err(|e| format!("Failed to copy {} to {}: {}", source.display(), destination.display(), e))
 }
 
 #[derive(Serialize)]
@@ -176,6 +277,7 @@ fn collect_files_recursive(root: &Path, current: &Path, entries: &mut Vec<CopyPl
                 .strip_prefix(root)
                 .map_err(|e| format!("Failed to compute relative path for {}: {}", path.display(), e))?
                 .to_path_buf();
+            let relative = normalize_image_relative_path(&relative);
 
             entries.push(CopyPlanEntry {
                 source: path,
@@ -380,12 +482,35 @@ fn copy_file_with_progress(
         ensure_dir(parent)?;
     }
 
+    validate_workspace_copy(source, destination)?;
+
+    let current_rel_path = Some(relative.to_string_lossy().to_string());
+
+    if should_convert_image_to_jpg(source, destination) {
+        let bytes_written = encode_image_as_jpg(source, destination, false)?;
+        *done_bytes += bytes_written;
+        *done_files += 1;
+
+        emit_progress(
+            app,
+            &WorkspaceProgress {
+                phase: phase.to_string(),
+                total_files,
+                done_files: *done_files,
+                total_bytes,
+                done_bytes: *done_bytes,
+                current_rel_path,
+            },
+        )?;
+
+        return Ok(());
+    }
+
     let mut input = fs::File::open(source)
         .map_err(|e| format!("Failed to open source file {}: {}", source.display(), e))?;
     let mut output = fs::File::create(destination)
         .map_err(|e| format!("Failed to create destination file {}: {}", destination.display(), e))?;
     let mut buffer = vec![0_u8; 1024 * 1024];
-    let current_rel_path = Some(relative.to_string_lossy().to_string());
 
     loop {
         let bytes_read = input
@@ -552,7 +677,12 @@ fn clear_workspace(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn copy_file_to_workspace(app: AppHandle, source_path: String, file_name: String) -> Result<String, String> {
+fn copy_file_to_workspace(
+    app: AppHandle,
+    source_path: String,
+    file_name: String,
+    resize_image: bool,
+) -> Result<String, String> {
     let root = workspace_root(&app)?;
     ensure_dir(&root)?;
 
@@ -566,8 +696,7 @@ fn copy_file_to_workspace(app: AppHandle, source_path: String, file_name: String
         ensure_dir(parent)?;
     }
 
-    fs::copy(&source, &destination)
-        .map_err(|e| format!("Failed to copy {} to {}: {}", source.display(), destination.display(), e))?;
+    copy_asset_to_path_with_options(&source, &destination, resize_image)?;
 
     Ok(destination.to_string_lossy().to_string())
 }

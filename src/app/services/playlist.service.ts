@@ -8,6 +8,7 @@ export class PlaylistService {
   private static readonly HEADER_SIZE = 20;
   private static readonly UUID_MAX_BYTES = 64;
   private static readonly TITLE_MAX_BYTES = 66;
+  private static readonly USER_TITLE_MAX_BYTES = 64;
   private static readonly UUID_LENGTH_OFFSET = PlaylistService.HEADER_SIZE;
   private static readonly UUID_DATA_OFFSET = PlaylistService.UUID_LENGTH_OFFSET + 1;
   private static readonly TITLE_LENGTH_OFFSET = PlaylistService.UUID_DATA_OFFSET + PlaylistService.UUID_MAX_BYTES;
@@ -38,6 +39,7 @@ export class PlaylistService {
   readonly visibleItemsCount = computed(() =>
     this.state().items.filter(item => item.type !== PlaylistItemType.Root).length
   );
+  readonly maxUserTitleBytes = PlaylistService.USER_TITLE_MAX_BYTES;
 
   private readonly ITEM_SIZE = PlaylistService.TITLE_DATA_OFFSET + PlaylistService.TITLE_MAX_BYTES;
 
@@ -684,6 +686,14 @@ export class PlaylistService {
       .filter(path => path.length > 0);
   }
 
+  normalizeUserTitleInput(value: string): string {
+    return this.trimToMaxBytes(value, PlaylistService.USER_TITLE_MAX_BYTES);
+  }
+
+  getUtf8ByteLength(value: string): number {
+    return new TextEncoder().encode(value).length;
+  }
+
   private resolveSelectedItem(hierarchy: PlaylistItem | null, selectedItem: PlaylistItem | null): PlaylistItem | null {
     if (!hierarchy || !selectedItem) {
       return null;
@@ -723,7 +733,7 @@ export class PlaylistService {
       return null;
     }
 
-    return this.trimToMaxBytes(trimmedTitle, PlaylistService.TITLE_MAX_BYTES);
+    return this.trimToMaxBytes(trimmedTitle, PlaylistService.USER_TITLE_MAX_BYTES);
   }
 
   private trimToMaxBytes(value: string, maxBytes: number): string {

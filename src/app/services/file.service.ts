@@ -25,6 +25,7 @@ interface MissingPlaylistAsset {
 export class FileService {
   private static readonly WORKSPACE_PROGRESS_EVENT = 'workspace-progress';
   private static readonly LOG_PREFIX = '[progress]';
+  private static readonly SUPPORTED_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'bmp'];
 
   private playlistService = inject(PlaylistService);
   private progressUnlisten: Promise<UnlistenFn> | null = null;
@@ -344,7 +345,8 @@ export class FileService {
       const workspaceFileName = await basename(targetPath);
       const workspacePath = await invoke<string>('copy_file_to_workspace', {
         sourcePath,
-        fileName: workspaceFileName
+        fileName: workspaceFileName,
+        resizeImage: false
       });
 
       imported.push({ sourcePath, workspacePath });
@@ -361,14 +363,19 @@ export class FileService {
       throw new Error('Image workspace path is not available');
     }
 
-    const fileName = item.imagepath
-      ? await basename(item.imagepath)
-      : `${item.uuid}.jpg`;
+    const fileName = this.normalizeImageFileName(
+      item.imagepath ? await basename(item.imagepath) : `${item.uuid}.jpg`
+    );
 
     return invoke<string>('copy_file_to_workspace', {
       sourcePath,
-      fileName
+      fileName,
+      resizeImage: true
     });
+  }
+
+  isSupportedImagePath(path: string): boolean {
+    return FileService.SUPPORTED_IMAGE_EXTENSIONS.includes(this.getFileExtension(path));
   }
 
   dispose(): void {
@@ -527,6 +534,15 @@ export class FileService {
 
   private async getWorkspaceStatus(): Promise<WorkspaceStatus> {
     return invoke<WorkspaceStatus>('get_workspace_status');
+  }
+
+  private normalizeImageFileName(fileName: string): string {
+    return fileName.replace(/\.(jpeg|png|bmp)$/i, '.jpg');
+  }
+
+  private getFileExtension(path: string): string {
+    const extension = path.split('.').pop();
+    return extension ? extension.toLowerCase() : '';
   }
 
   private async flushWorkspacePlaylistWrites(): Promise<void> {
