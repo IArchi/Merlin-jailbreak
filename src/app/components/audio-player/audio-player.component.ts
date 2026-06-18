@@ -31,10 +31,6 @@ export class AudioPlayerComponent implements OnChanges, OnDestroy {
     }
 
     this.cleanup();
-
-    if (this.soundpath) {
-      void this.loadAudio(false);
-    }
   }
 
   ngOnDestroy(): void {

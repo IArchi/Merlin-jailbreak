@@ -30,7 +30,51 @@ export interface PlaylistState {
   selectedItem: PlaylistItem | null;
   filePath: string | null;
   basePath: string | null;
+  workspacePath: string | null;
   isDirty: boolean;
+}
+
+export interface WorkspaceStatus {
+  root: string;
+  exists: boolean;
+  non_empty: boolean;
+  playlist_path: string | null;
+  temp_exists: boolean;
+  temp_non_empty: boolean;
+  can_reopen: boolean;
+}
+
+export interface WorkspaceOpenResult {
+  root: string;
+  playlist_path: string;
+  base_path: string;
+}
+
+export interface WorkspaceTransferResult {
+  root: string;
+  playlist_path: string;
+  base_path: string;
+  total_files: number;
+  total_bytes: number;
+}
+
+export interface WorkspaceProgress {
+  phase: string;
+  total_files: number;
+  done_files: number;
+  total_bytes: number;
+  done_bytes: number;
+  current_rel_path: string | null;
+}
+
+export interface OperationProgress {
+  label: string;
+  detail: string;
+  percent: number | null;
+  currentFile: string | null;
+  filesText: string | null;
+  bytesText: string | null;
+  indeterminate: boolean;
 }
 
 export interface DragDropData {

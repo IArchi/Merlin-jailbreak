@@ -17,10 +17,11 @@ export class WelcomeComponent {
   isDragOver = false;
 
   async onImport(): Promise<void> {
-    await this.fileService.openFile();
+    await this.fileService.openPlaylistDirectory();
   }
 
   onCreatePlaylist(): void {
+    this.playlistService.setWorkspacePath(this.playlistService.workspacePath());
     this.playlistService.createEmptyPlaylist();
   }
 
@@ -45,11 +46,7 @@ export class WelcomeComponent {
     // This is a placeholder for potential future implementation
     const files = event.dataTransfer?.files;
     if (files && files.length > 0) {
-      const file = files[0];
-      if (file.name.endsWith('.bin')) {
-        // For now, just open the file dialog
-        await this.fileService.openFile();
-      }
+      await this.fileService.openPlaylistDirectory();
     }
   }
 }

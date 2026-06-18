@@ -15,14 +15,15 @@ export class HeaderComponent {
   protected fileService = inject(FileService);
 
   async onImport(): Promise<void> {
-    await this.fileService.openFile();
+    await this.fileService.openPlaylistDirectory();
   }
 
   async onExport(): Promise<void> {
-    await this.fileService.saveFile();
+    await this.fileService.exportFile();
   }
 
   onCreatePlaylist(): void {
+    this.playlistService.setWorkspacePath(this.playlistService.workspacePath());
     this.playlistService.createEmptyPlaylist();
   }
 

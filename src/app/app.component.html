@@ -9,4 +9,32 @@
   } @else {
     <app-welcome />
   }
+
+  @if (fileService.operationInProgress()) {
+    <div class="progress-overlay">
+      <div class="progress-card card animate-fade-in">
+        <div class="progress-title">{{ operationProgress.label }}</div>
+        <div class="progress-detail">{{ operationProgress.detail }}</div>
+
+        @if (operationProgress.filesText || operationProgress.bytesText) {
+          <div class="progress-meta">
+            <span>{{ operationProgress.filesText }}</span>
+            <span>{{ operationProgress.bytesText }}</span>
+          </div>
+        }
+
+        <div class="progress-bar" [class.is-indeterminate]="operationProgress.indeterminate" aria-hidden="true">
+          <div
+            class="progress-bar-fill"
+            [class.is-indeterminate]="operationProgress.indeterminate"
+            [style.width.%]="operationProgress.percent ?? 0"
+          ></div>
+        </div>
+
+        <div class="progress-current">
+          {{ operationProgress.currentFile || 'Préparation...' }}
+        </div>
+      </div>
+    </div>
+  }
 </div>

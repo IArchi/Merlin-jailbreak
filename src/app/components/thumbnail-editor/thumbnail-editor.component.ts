@@ -64,8 +64,9 @@ export class ThumbnailEditorComponent {
       this.isLoading.set(true);
       const imagePath = await this.fileService.selectImage();
       if (imagePath) {
-        this.playlistService.updateItemImage(this.itemId, imagePath);
-        this.imageChanged.emit(imagePath);
+        const workspacePath = await this.fileService.copyImageToWorkspace(this.itemId, imagePath);
+        this.playlistService.updateItemImage(this.itemId, workspacePath);
+        this.imageChanged.emit(workspacePath);
       }
     } finally {
       this.isLoading.set(false);

@@ -3,7 +3,7 @@
     <div class="hero-copy">
       <div class="eyebrow">Playlist editor</div>
       <h1 class="title">Merlin JailBreak</h1>
-      <p class="subtitle">Créez une playlist vide ou importez un fichier existant pour organiser votre Merlin MusicBox.</p>
+      <p class="subtitle">Créez une playlist vide ou importez un dossier existant. Le contenu est copié dans un dossier de travail local avant édition.</p>
 
       <div class="actions">
         <button class="btn btn-primary btn-lg" (click)="onCreatePlaylist()">
@@ -12,7 +12,7 @@
             <line x1="12" y1="10" x2="12" y2="16"/>
             <line x1="9" y1="13" x2="15" y2="13"/>
           </svg>
-          Créer une playlist vide
+          Nouvelle playlist
         </button>
 
         <button class="btn btn-secondary btn-lg" (click)="onImport()">
@@ -21,7 +21,7 @@
             <polyline points="7,10 12,15 17,10"/>
             <line x1="12" y1="15" x2="12" y2="3"/>
           </svg>
-          Importer un fichier playlist.bin
+          Importer un dossier Merlin
         </button>
       </div>
     </div>
@@ -42,7 +42,7 @@
         </div>
 
         <h2 class="drop-zone-title">Import rapide</h2>
-        <p class="drop-zone-text">Glissez-déposez votre fichier <code>.bin</code> dans cette zone pour ouvrir une playlist existante.</p>
+        <p class="drop-zone-text">Sélectionnez un dossier Merlin complet. Les mp3, vignettes, fichiers <code>.cfg</code> et <code>playlist.bin</code> seront copiés dans le workspace local.</p>
 
         <p class="hint">
           Compatible avec les playlists exportées depuis Merlin MusicBox

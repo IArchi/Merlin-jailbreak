@@ -152,7 +152,28 @@ export class EditorPanelComponent {
       return;
     }
 
-    this.playlistService.createSongs(parent.id, filePaths);
+    const createdSongs = this.playlistService.createSongs(parent.id, filePaths);
+
+    try {
+      const importedFiles = await this.fileService.importAudioToWorkspace(
+        filePaths,
+        createdSongs.map(song => song.soundpath)
+      );
+      const sourceToWorkspace = new Map(importedFiles.map(file => [file.sourcePath, file.workspacePath]));
+
+      createdSongs.forEach((song, index) => {
+        const sourcePath = filePaths[index];
+        const workspacePath = sourceToWorkspace.get(sourcePath);
+
+        if (!workspacePath) {
+          return;
+        }
+
+        this.playlistService.updateItemAssetPaths(song.id, { soundpath: workspacePath });
+      });
+    } catch (error) {
+      console.error('Error importing audio into workspace:', error);
+    }
   }
 
   onCreateSubfolder(): void {

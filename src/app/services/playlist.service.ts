@@ -5,13 +5,20 @@ import { PlaylistItem, PlaylistItemType, PlaylistState } from '../models/playlis
   providedIn: 'root'
 })
 export class PlaylistService {
-  private static readonly INVALID_TITLE_CHARS = /[ ._]/;
+  private static readonly HEADER_SIZE = 20;
+  private static readonly UUID_MAX_BYTES = 64;
+  private static readonly TITLE_MAX_BYTES = 66;
+  private static readonly UUID_LENGTH_OFFSET = PlaylistService.HEADER_SIZE;
+  private static readonly UUID_DATA_OFFSET = PlaylistService.UUID_LENGTH_OFFSET + 1;
+  private static readonly TITLE_LENGTH_OFFSET = PlaylistService.UUID_DATA_OFFSET + PlaylistService.UUID_MAX_BYTES;
+  private static readonly TITLE_DATA_OFFSET = PlaylistService.TITLE_LENGTH_OFFSET + 1;
   private state = signal<PlaylistState>({
     items: [],
     hierarchy: null,
     selectedItem: null,
     filePath: null,
     basePath: null,
+    workspacePath: null,
     isDirty: false
   });
 
@@ -20,6 +27,7 @@ export class PlaylistService {
   readonly selectedItem = computed(() => this.state().selectedItem);
   readonly filePath = computed(() => this.state().filePath);
   readonly basePath = computed(() => this.state().basePath);
+  readonly workspacePath = computed(() => this.state().workspacePath);
   readonly isDirty = computed(() => this.state().isDirty);
   readonly foldersCount = computed(() =>
     this.state().items.filter(item => item.type === PlaylistItemType.Folder || item.type === PlaylistItemType.Favorite).length
@@ -31,7 +39,7 @@ export class PlaylistService {
     this.state().items.filter(item => item.type !== PlaylistItemType.Root).length
   );
 
-  private readonly ITEM_SIZE = 156; // Total bytes per item in binary format
+  private readonly ITEM_SIZE = PlaylistService.TITLE_DATA_OFFSET + PlaylistService.TITLE_MAX_BYTES;
 
   private createRootItem(): PlaylistItem {
     return {
@@ -61,7 +69,7 @@ export class PlaylistService {
     const view = new DataView(buffer);
     let offset = 0;
 
-    while (offset < buffer.byteLength) {
+    while (offset + this.ITEM_SIZE <= buffer.byteLength) {
       const item: PlaylistItem = {
         id: view.getUint16(offset, true),
         parent_id: view.getUint16(offset + 2, true),
@@ -81,13 +89,19 @@ export class PlaylistService {
       };
 
       // Read UUID (1 byte length + 64 bytes data)
-      const uuidLength = view.getUint8(offset + 20);
-      const uuidBytes = new Uint8Array(buffer, offset + 21, uuidLength);
+      const uuidLength = view.getUint8(offset + PlaylistService.UUID_LENGTH_OFFSET);
+      if (uuidLength > PlaylistService.UUID_MAX_BYTES) {
+        throw new RangeError(`Invalid UUID length ${uuidLength} at record offset ${offset}`);
+      }
+      const uuidBytes = new Uint8Array(buffer, offset + PlaylistService.UUID_DATA_OFFSET, uuidLength);
       item.uuid = new TextDecoder().decode(uuidBytes);
 
       // Read Title (1 byte length + 66 bytes data) - starts at offset + 85
-      const titleLength = view.getUint8(offset + 85);
-      const titleBytes = new Uint8Array(buffer, offset + 86, titleLength);
+      const titleLength = view.getUint8(offset + PlaylistService.TITLE_LENGTH_OFFSET);
+      if (titleLength > PlaylistService.TITLE_MAX_BYTES) {
+        throw new RangeError(`Invalid title length ${titleLength} at record offset ${offset}`);
+      }
+      const titleBytes = new Uint8Array(buffer, offset + PlaylistService.TITLE_DATA_OFFSET, titleLength);
       item.title = new TextDecoder().decode(titleBytes);
 
       // Set image and sound paths based on type
@@ -100,6 +114,13 @@ export class PlaylistService {
 
       items.push(item);
       offset += this.ITEM_SIZE;
+    }
+
+    if (offset !== buffer.byteLength) {
+      const remainingBytes = buffer.byteLength - offset;
+      throw new RangeError(
+        `Invalid playlist.bin size: trailing ${remainingBytes} byte(s) after ${items.length} item(s)`
+      );
     }
 
     return items;
@@ -184,7 +205,7 @@ export class PlaylistService {
   /**
    * Load playlist from file
    */
-  loadPlaylist(buffer: ArrayBuffer, filePath: string, basePath: string): void {
+  loadPlaylist(buffer: ArrayBuffer, filePath: string, basePath: string, workspacePath: string | null = null): void {
     const items = this.parsePlaylistBin(buffer, basePath);
     const hierarchy = this.buildHierarchy(items);
 
@@ -194,6 +215,7 @@ export class PlaylistService {
       selectedItem: null,
       filePath,
       basePath,
+      workspacePath,
       isDirty: false
     });
   }
@@ -203,13 +225,15 @@ export class PlaylistService {
    */
   createEmptyPlaylist(): void {
     const root = this.createRootItem();
+    const workspacePath = this.state().workspacePath;
 
     this.state.set({
       items: [root],
       hierarchy: root,
       selectedItem: root,
       filePath: null,
-      basePath: null,
+      basePath: workspacePath,
+      workspacePath,
       isDirty: true
     });
   }
@@ -444,16 +468,19 @@ export class PlaylistService {
     });
   }
 
-  createSongs(parentId: number, filePaths: string[]): void {
+  createSongs(parentId: number, filePaths: string[]): PlaylistItem[] {
     if (filePaths.length === 0) {
-      return;
+      return [];
     }
+
+    let createdSongs: PlaylistItem[] = [];
 
     this.state.update(s => {
       const maxId = Math.max(...s.items.map(i => i.id), 0);
       const siblings = s.items.filter(i => i.parent_id === parentId);
       const nextOrder = siblings.length > 0 ? Math.max(...siblings.map(i => i.order)) + 1 : 0;
       const now = Math.floor(Date.now() / 1000);
+      const workspacePath = s.workspacePath;
 
       const newSongs = filePaths.map<PlaylistItem | null>((filePath, index) => {
         const fileName = this.getFileName(filePath);
@@ -462,6 +489,8 @@ export class PlaylistService {
         if (!title) {
           return null;
         }
+
+        const uuid = crypto.randomUUID();
 
         return {
           id: maxId + index + 1,
@@ -472,15 +501,17 @@ export class PlaylistService {
           type: PlaylistItemType.Song,
           limit_time: 0,
           add_time: now,
-          uuid: crypto.randomUUID(),
+          uuid,
           title,
           imagepath: '',
-          soundpath: filePath,
+          soundpath: this.buildWorkspaceAssetPath(workspacePath, uuid, 'mp3') || filePath,
           children: [],
           expanded: false,
           selected: false
         };
       }).filter((song): song is PlaylistItem => song !== null);
+
+      createdSongs = newSongs;
 
       if (newSongs.length === 0) {
         return s;
@@ -501,8 +532,10 @@ export class PlaylistService {
         hierarchy,
         selectedItem: this.resolveSelectedItem(hierarchy, s.selectedItem),
         isDirty: true
-      };
+        };
     });
+
+    return createdSongs;
   }
 
   /**
@@ -592,12 +625,15 @@ export class PlaylistService {
    * Reset state
    */
   reset(): void {
+    const workspacePath = this.state().workspacePath;
+
     this.state.set({
       items: [],
       hierarchy: null,
       selectedItem: null,
       filePath: null,
-      basePath: null,
+      basePath: workspacePath,
+      workspacePath,
       isDirty: false
     });
   }
@@ -607,6 +643,45 @@ export class PlaylistService {
    */
   markAsSaved(): void {
     this.state.update(s => ({ ...s, isDirty: false }));
+  }
+
+  setWorkspacePath(workspacePath: string | null): void {
+    this.state.update(s => ({
+      ...s,
+      workspacePath,
+      basePath: workspacePath ?? s.basePath
+    }));
+  }
+
+  updateItemAssetPaths(itemId: number, updates: { imagepath?: string; soundpath?: string }): void {
+    this.state.update(s => {
+      const itemToUpdate = s.items.find(item => item.id === itemId);
+      if (!itemToUpdate) {
+        return s;
+      }
+
+      const mergedUpdates: Partial<PlaylistItem> = {
+        ...updates,
+        type: updates.imagepath !== undefined
+          ? this.getTypeForImage(itemToUpdate.type, updates.imagepath)
+          : itemToUpdate.type
+      };
+
+      return {
+        ...s,
+        items: s.items.map(item => item.id === itemId ? { ...item, ...mergedUpdates } : item),
+        hierarchy: s.hierarchy ? this.updateInHierarchy(s.hierarchy, itemId, mergedUpdates) : null,
+        selectedItem: s.selectedItem?.id === itemId ? { ...s.selectedItem, ...mergedUpdates } : s.selectedItem,
+        isDirty: true
+      };
+    });
+  }
+
+  getExportAssetPaths(): string[] {
+    return this.state().items
+      .flatMap(item => [item.imagepath, item.soundpath])
+      .map(path => path.trim())
+      .filter(path => path.length > 0);
   }
 
   private resolveSelectedItem(hierarchy: PlaylistItem | null, selectedItem: PlaylistItem | null): PlaylistItem | null {
@@ -633,14 +708,44 @@ export class PlaylistService {
     return path.split(/[/\\]/).pop() || path;
   }
 
+  private buildWorkspaceAssetPath(workspacePath: string | null, uuid: string, extension: string): string {
+    if (!workspacePath) {
+      return '';
+    }
+
+    return `${workspacePath.replace(/[\\/]+$/, '')}/${uuid}.${extension}`;
+  }
+
   private sanitizeTitle(title: string): string | null {
     const trimmedTitle = title.trim();
 
-    if (!trimmedTitle || PlaylistService.INVALID_TITLE_CHARS.test(trimmedTitle)) {
+    if (!trimmedTitle) {
       return null;
     }
 
-    return trimmedTitle;
+    return this.trimToMaxBytes(trimmedTitle, PlaylistService.TITLE_MAX_BYTES);
+  }
+
+  private trimToMaxBytes(value: string, maxBytes: number): string {
+    const encoder = new TextEncoder();
+
+    if (encoder.encode(value).length <= maxBytes) {
+      return value;
+    }
+
+    let trimmed = '';
+
+    for (const char of value) {
+      const nextValue = trimmed + char;
+
+      if (encoder.encode(nextValue).length > maxBytes) {
+        break;
+      }
+
+      trimmed = nextValue;
+    }
+
+    return trimmed.trim();
   }
 
   private expandAncestors(items: PlaylistItem[], itemId: number): PlaylistItem[] {

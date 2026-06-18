@@ -3,6 +3,7 @@
   flex-direction: column;
   height: 100vh;
   background: transparent;
+  position: relative;
 }
 
 .app-content {
@@ -26,10 +27,102 @@ app-editor-panel {
   min-height: 0;
 }
 
+.progress-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xl);
+  background: rgba(11, 36, 53, 0.28);
+  backdrop-filter: blur(10px);
+  z-index: 100;
+}
+
+.progress-card {
+  width: min(520px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding: var(--spacing-xl);
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.progress-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--front-app);
+}
+
+.progress-detail {
+  font-size: 0.95rem;
+  color: rgba(var(--front-app-rgb), 0.72);
+}
+
+.progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  color: rgba(var(--front-app-rgb), 0.72);
+  font-size: 0.875rem;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 14px;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: rgba(var(--front-app-rgb), 0.12);
+  position: relative;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary-500), var(--accent-500));
+  transition: width var(--transition-fast);
+}
+
+.progress-bar.is-indeterminate {
+  background: rgba(var(--front-app-rgb), 0.08);
+}
+
+.progress-bar-fill.is-indeterminate {
+  width: 40% !important;
+  position: absolute;
+  inset: 0 auto 0 0;
+  animation: progress-indeterminate 1.2s ease-in-out infinite;
+}
+
+.progress-current {
+  min-height: 1.5em;
+  font-size: 0.875rem;
+  color: rgba(var(--front-app-rgb), 0.78);
+  word-break: break-word;
+}
+
+@keyframes progress-indeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(250%);
+  }
+}
+
 @media (max-width: 768px) {
   .app-content {
     flex-direction: column;
     padding: 0 var(--spacing-md) var(--spacing-md);
     gap: var(--spacing-md);
+  }
+
+  .progress-card {
+    padding: var(--spacing-lg);
+  }
+
+  .progress-meta {
+    flex-direction: column;
   }
 }
