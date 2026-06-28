@@ -1016,10 +1016,20 @@ export class PlaylistService {
   }
 
   private normalizeSupportedTitleCharacters(value: string): string {
-    return value
+    const normalized = value
+      .normalize('NFKD')
       .replace(/[\u2018\u2019\u201B\u2032]/g, "'")
       .replace(/[\u201C\u201D\u2033]/g, '"')
-      .replace(/\u00A0/g, ' ');
+      .replace(/[\u2010-\u2015]/g, '-')
+      .replace(/\u2026/g, '...')
+      .replace(/\u0153/g, 'oe')
+      .replace(/\u0152/g, 'OE')
+      .replace(/\u00E6/g, 'ae')
+      .replace(/\u00C6/g, 'AE')
+      .replace(/\u00A0/g, ' ')
+      .replace(/[\u0300-\u036f]/g, '');
+
+    return normalized.replace(/[^\x20-\x7E]/g, ' ');
   }
 
   private prepareItemsForExport(items: PlaylistItem[]): PlaylistItem[] {
@@ -1029,6 +1039,7 @@ export class PlaylistService {
       expanded: undefined,
       selected: undefined
     }));
+    const originalById = new Map(exportItems.map(item => [item.id, item]));
     const childrenByParent = new Map<number, PlaylistItem[]>();
 
     exportItems.forEach(item => {
@@ -1088,7 +1099,31 @@ export class PlaylistService {
       visit(item);
     }
 
-    return orderedItems;
+    const remappedIds = new Map<number, number>();
+    orderedItems.forEach((item, index) => {
+      remappedIds.set(item.id, index + 1);
+    });
+
+    return orderedItems.map(item => {
+      const originalItem = originalById.get(item.id);
+      const remappedId = remappedIds.get(item.id) ?? item.id;
+      const remappedParentId = item.parent_id === 0
+        ? 0
+        : (remappedIds.get(item.parent_id) ?? item.parent_id);
+      const normalizedTitle = item.type === PlaylistItemType.Root
+        ? 'Root'
+        : this.trimToMaxBytes(
+          this.normalizeSupportedTitleCharacters(originalItem?.title ?? item.title).trim(),
+          PlaylistService.TITLE_MAX_BYTES
+        );
+
+      return {
+        ...item,
+        id: remappedId,
+        parent_id: remappedParentId,
+        title: normalizedTitle || item.title
+      };
+    });
   }
 
   private trimToMaxBytes(value: string, maxBytes: number): string {
