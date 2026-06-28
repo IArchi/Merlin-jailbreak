@@ -81,3 +81,9 @@ export interface DragDropData {
   item: PlaylistItem;
   sourceParentId: number;
 }
+
+export interface AudioImportCandidate {
+  source_path: string;
+  title: string;
+  image_source_path: string | null;
+}

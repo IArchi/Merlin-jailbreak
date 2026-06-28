@@ -1,12 +1,18 @@
 import { Component, inject, signal, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { confirm } from '@tauri-apps/plugin-dialog';
+import { confirm, message } from '@tauri-apps/plugin-dialog';
 import { PlaylistService } from '../../services/playlist.service';
 import { FileService } from '../../services/file.service';
-import { PlaylistItem, PlaylistItemType } from '../../models/playlist-item.model';
+import { AudioImportCandidate, PlaylistItem, PlaylistItemType } from '../../models/playlist-item.model';
 import { AudioPlayerComponent } from '../audio-player/audio-player.component';
 import { ThumbnailEditorComponent } from '../thumbnail-editor/thumbnail-editor.component';
+
+interface ResolvedAudioImportCandidate {
+  sourcePath: string;
+  title: string;
+  imageSourcePath: string | null;
+}
 
 @Component({
   selector: 'app-editor-panel',
@@ -163,33 +169,129 @@ export class EditorPanelComponent {
       return;
     }
 
-    const filePaths = await this.fileService.selectAudioFiles();
-    if (filePaths.length === 0) {
+    const shouldSelectDirectory = await confirm(
+      'Voulez-vous importer un dossier plutôt que des fichiers MP3 ?\n\nLe dossier peut contenir des MP3 à la racine, ou des sous-dossiers contenant un MP3 et une image.',
+      {
+        title: 'Importer des MP3',
+        kind: 'info',
+        okLabel: 'Choisir un dossier',
+        cancelLabel: 'Choisir des fichiers'
+      }
+    );
+
+    const candidates = shouldSelectDirectory
+      ? await this.selectAudioImportCandidatesFromDirectory()
+      : await this.selectAudioImportCandidatesFromFiles();
+
+    if (candidates.length === 0) {
       return;
     }
 
-    const createdSongs = this.playlistService.createSongs(parent.id, filePaths);
+    const createdSongs = this.playlistService.createSongs(
+      parent.id,
+      candidates.map(candidate => ({ sourcePath: candidate.sourcePath, title: candidate.title }))
+    );
 
     try {
       const importedFiles = await this.fileService.importAudioToWorkspace(
-        filePaths,
+        candidates.map(candidate => candidate.sourcePath),
         createdSongs.map(song => song.soundpath)
       );
       const sourceToWorkspace = new Map(importedFiles.map(file => [file.sourcePath, file.workspacePath]));
+      const imageImports = await this.fileService.importImagesToWorkspace(
+        createdSongs.flatMap((song, index) => {
+          const imageSourcePath = candidates[index]?.imageSourcePath;
+          return imageSourcePath ? [{ itemId: song.id, sourcePath: imageSourcePath }] : [];
+        })
+      );
+      const songIdToImagePath = new Map(imageImports.map(file => [file.itemId, file.workspacePath]));
 
       createdSongs.forEach((song, index) => {
-        const sourcePath = filePaths[index];
+        const sourcePath = candidates[index]?.sourcePath;
         const workspacePath = sourceToWorkspace.get(sourcePath);
+        const imageWorkspacePath = songIdToImagePath.get(song.id);
 
-        if (!workspacePath) {
+        if (!workspacePath && !imageWorkspacePath) {
           return;
         }
 
-        this.playlistService.updateItemAssetPaths(song.id, { soundpath: workspacePath });
+        const assetUpdates: { soundpath?: string; imagepath?: string } = {};
+
+        if (workspacePath) {
+          assetUpdates.soundpath = workspacePath;
+        }
+
+        if (imageWorkspacePath) {
+          assetUpdates.imagepath = imageWorkspacePath;
+        }
+
+        this.playlistService.updateItemAssetPaths(song.id, assetUpdates);
       });
     } catch (error) {
       console.error('Error importing audio into workspace:', error);
+      await message(this.getImportDirectoryErrorMessage(error), {
+        title: 'Erreur d’import',
+        kind: 'error'
+      });
     }
+  }
+
+  private async selectAudioImportCandidatesFromFiles(): Promise<ResolvedAudioImportCandidate[]> {
+    const filePaths = await this.fileService.selectAudioFiles();
+    return filePaths.map(filePath => ({
+      sourcePath: filePath,
+      title: filePath.split(/[/\\]/).pop()?.replace(/\.mp3$/i, '') || 'Piste audio',
+      imageSourcePath: null
+    }));
+  }
+
+  private async selectAudioImportCandidatesFromDirectory(): Promise<ResolvedAudioImportCandidate[]> {
+    const directoryPath = await this.fileService.selectAudioImportDirectory();
+    if (!directoryPath) {
+      return [];
+    }
+
+    try {
+      const scanned = await this.fileService.scanAudioImportDirectory(directoryPath);
+      const candidates: ResolvedAudioImportCandidate[] = scanned.map((candidate: AudioImportCandidate) => ({
+        sourcePath: candidate.source_path,
+        title: candidate.title,
+        imageSourcePath: candidate.image_source_path
+      }));
+
+      if (candidates.length === 0) {
+        await message(
+          'Aucun MP3 importable n’a été trouvé dans ce dossier.\n\nFormats pris en charge :\n- MP3 à la racine du dossier\n- Sous-dossiers contenant un MP3 et une image',
+          {
+            title: 'Import impossible',
+            kind: 'warning'
+          }
+        );
+      }
+
+      return candidates;
+    } catch (error) {
+      await message(
+        this.getImportDirectoryErrorMessage(error),
+        {
+          title: 'Erreur d’import',
+          kind: 'error'
+        }
+      );
+      return [];
+    }
+  }
+
+  private getImportDirectoryErrorMessage(error: unknown): string {
+    if (error instanceof Error && error.message.trim()) {
+      return error.message;
+    }
+
+    if (typeof error === 'string' && error.trim()) {
+      return error;
+    }
+
+    return 'Le scan du dossier a échoué.';
   }
 
   onCreateSubfolder(): void {

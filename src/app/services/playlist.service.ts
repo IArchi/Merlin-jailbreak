@@ -1,6 +1,11 @@
 import { Injectable, signal, computed } from '@angular/core';
 import { PlaylistItem, PlaylistItemType, PlaylistState } from '../models/playlist-item.model';
 
+interface SongDraft {
+  sourcePath: string;
+  title?: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -470,8 +475,8 @@ export class PlaylistService {
     });
   }
 
-  createSongs(parentId: number, filePaths: string[]): PlaylistItem[] {
-    if (filePaths.length === 0) {
+  createSongs(parentId: number, entries: Array<string | SongDraft>): PlaylistItem[] {
+    if (entries.length === 0) {
       return [];
     }
 
@@ -484,9 +489,12 @@ export class PlaylistService {
       const now = Math.floor(Date.now() / 1000);
       const workspacePath = s.workspacePath;
 
-      const newSongs = filePaths.map<PlaylistItem | null>((filePath, index) => {
-        const fileName = this.getFileName(filePath);
-        const title = this.sanitizeTitle(fileName.replace(/\.mp3$/i, ''));
+      const newSongs = entries.map<PlaylistItem | null>((entry, index) => {
+        const filePath = typeof entry === 'string' ? entry : entry.sourcePath;
+        const rawTitle = typeof entry === 'string'
+          ? this.getFileName(filePath).replace(/\.mp3$/i, '')
+          : (entry.title?.trim() || this.getFileName(filePath).replace(/\.mp3$/i, ''));
+        const title = this.sanitizeTitle(rawTitle);
 
         if (!title) {
           return null;

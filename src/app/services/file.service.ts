@@ -6,6 +6,7 @@ import { basename } from '@tauri-apps/api/path';
 import { confirm, message, open } from '@tauri-apps/plugin-dialog';
 import { PlaylistService } from './playlist.service';
 import {
+  AudioImportCandidate,
   OperationProgress,
   WorkspaceOpenResult,
   WorkspaceProgress,
@@ -331,6 +332,35 @@ export class FileService {
     }
   }
 
+  async selectAudioImportDirectory(): Promise<string | null> {
+    try {
+      const selected = await open({
+        directory: true,
+        recursive: true,
+        multiple: false,
+        title: 'Sélectionner un dossier à importer'
+      });
+
+      if (selected && typeof selected === 'string') {
+        return selected;
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Error selecting audio import directory:', error);
+      return null;
+    }
+  }
+
+  async scanAudioImportDirectory(sourceDir: string): Promise<AudioImportCandidate[]> {
+    try {
+      return await invoke<AudioImportCandidate[]>('scan_audio_import_directory', { sourceDir });
+    } catch (error) {
+      console.error('Error scanning audio import directory:', error);
+      throw error;
+    }
+  }
+
   async importAudioToWorkspace(filePaths: string[], targetPaths: string[]): Promise<Array<{ sourcePath: string; workspacePath: string }>> {
     const imported: Array<{ sourcePath: string; workspacePath: string }> = [];
 
@@ -350,6 +380,21 @@ export class FileService {
       });
 
       imported.push({ sourcePath, workspacePath });
+    }
+
+    return imported;
+  }
+
+  async importImagesToWorkspace(entries: Array<{ itemId: number; sourcePath: string }>): Promise<Array<{ itemId: number; workspacePath: string }>> {
+    const imported: Array<{ itemId: number; workspacePath: string }> = [];
+
+    for (const entry of entries) {
+      if (!entry.sourcePath) {
+        continue;
+      }
+
+      const workspacePath = await this.copyImageToWorkspace(entry.itemId, entry.sourcePath);
+      imported.push({ itemId: entry.itemId, workspacePath });
     }
 
     return imported;

@@ -93,6 +93,93 @@ fn should_encode_image_as_jpg(source: &Path, destination: &Path) -> bool {
             .unwrap_or(false)
 }
 
+fn is_mp3_file(path: &Path) -> bool {
+    matches!(lowercase_extension(path).as_deref(), Some("mp3"))
+}
+
+fn is_supported_image_file(path: &Path) -> bool {
+    lowercase_extension(path)
+        .as_deref()
+        .map(is_supported_image_extension)
+        .unwrap_or(false)
+}
+
+fn sorted_dir_paths(path: &Path) -> Result<Vec<PathBuf>, String> {
+    let mut entries = fs::read_dir(path)
+        .map_err(|e| format!("Failed to read directory {}: {}", path.display(), e))?
+        .map(|entry| {
+            entry
+                .map(|value| value.path())
+                .map_err(|e| format!("Failed to read directory entry in {}: {}", path.display(), e))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    entries.sort_by(|left, right| {
+        let left_name = left
+            .file_name()
+            .and_then(|name| name.to_str())
+            .map(|name| name.to_ascii_lowercase())
+            .unwrap_or_default();
+        let right_name = right
+            .file_name()
+            .and_then(|name| name.to_str())
+            .map(|name| name.to_ascii_lowercase())
+            .unwrap_or_default();
+
+        left_name.cmp(&right_name)
+    });
+
+    Ok(entries)
+}
+
+fn collect_audio_album_imports(path: &Path, imports: &mut Vec<AudioImportCandidate>) -> Result<(), String> {
+    for entry in sorted_dir_paths(path)? {
+        if !entry.is_dir() || should_skip_dir(&entry) {
+            continue;
+        }
+
+        let mut mp3_files = Vec::new();
+        let mut image_files = Vec::new();
+
+        for child in sorted_dir_paths(&entry)? {
+            if !child.is_file() {
+                continue;
+            }
+
+            if is_mp3_file(&child) {
+                mp3_files.push(child);
+            } else if is_supported_image_file(&child) {
+                image_files.push(child);
+            }
+        }
+
+        if let (Some(mp3_path), Some(image_path)) = (mp3_files.first(), image_files.first()) {
+            let title = entry
+                .file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| name.trim().to_string())
+                .filter(|name| !name.is_empty())
+                .unwrap_or_else(|| {
+                    mp3_path
+                        .file_stem()
+                        .and_then(|name| name.to_str())
+                        .map(|name| name.to_string())
+                        .unwrap_or_else(|| "Piste audio".to_string())
+                });
+
+            imports.push(AudioImportCandidate {
+                source_path: mp3_path.to_string_lossy().to_string(),
+                title,
+                image_source_path: Some(image_path.to_string_lossy().to_string()),
+            });
+        }
+
+        collect_audio_album_imports(&entry, imports)?;
+    }
+
+    Ok(())
+}
+
 fn encode_image_as_jpg(source: &Path, destination: &Path, resize_to_thumbnail: bool) -> Result<u64, String> {
     let reader = ImageReader::open(source)
         .map_err(|e| format!("Failed to open image {}: {}", source.display(), e))?;
@@ -170,6 +257,13 @@ struct WorkspaceTransferResult {
     base_path: String,
     total_files: u64,
     total_bytes: u64,
+}
+
+#[derive(Serialize)]
+struct AudioImportCandidate {
+    source_path: String,
+    title: String,
+    image_source_path: Option<String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -677,6 +771,44 @@ fn clear_workspace(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn scan_audio_import_directory(source_dir: String) -> Result<Vec<AudioImportCandidate>, String> {
+    let root = PathBuf::from(&source_dir);
+
+    if !root.exists() {
+        return Err(format!("Source directory does not exist: {}", root.display()));
+    }
+
+    if !root.is_dir() {
+        return Err(format!("Source path is not a directory: {}", root.display()));
+    }
+
+    let mut imports = Vec::new();
+
+    for entry in sorted_dir_paths(&root)? {
+        if !entry.is_file() || !is_mp3_file(&entry) {
+            continue;
+        }
+
+        let title = entry
+            .file_stem()
+            .and_then(|name| name.to_str())
+            .map(|name| name.trim().to_string())
+            .filter(|name| !name.is_empty())
+            .unwrap_or_else(|| "Piste audio".to_string());
+
+        imports.push(AudioImportCandidate {
+            source_path: entry.to_string_lossy().to_string(),
+            title,
+            image_source_path: None,
+        });
+    }
+
+    collect_audio_album_imports(&root, &mut imports)?;
+
+    Ok(imports)
+}
+
+#[tauri::command]
 fn copy_file_to_workspace(
     app: AppHandle,
     source_path: String,
@@ -782,6 +914,7 @@ pub fn run() {
             get_workspace_status,
             reopen_workspace,
             clear_workspace,
+            scan_audio_import_directory,
             copy_file_to_workspace,
             import_workspace,
             export_workspace,
