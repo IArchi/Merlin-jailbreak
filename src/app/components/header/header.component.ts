@@ -1,6 +1,5 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { message } from '@tauri-apps/plugin-dialog';
 import { PlaylistService } from '../../services/playlist.service';
 import { FileService } from '../../services/file.service';
 
@@ -14,6 +13,7 @@ import { FileService } from '../../services/file.service';
 export class HeaderComponent {
   protected playlistService = inject(PlaylistService);
   protected fileService = inject(FileService);
+  protected readonly debugDialogOpen = signal(false);
 
   async onImport(): Promise<void> {
     await this.fileService.openPlaylistDirectory();
@@ -41,10 +41,10 @@ export class HeaderComponent {
   async onDebugPlaylist(): Promise<void> {
     const debugText = this.playlistService.debugTreeText();
     console.info('[debug][playlist]\n' + debugText);
+    this.debugDialogOpen.set(true);
+  }
 
-    await message(debugText, {
-      title: 'Debug playlist.bin',
-      kind: 'info'
-    });
+  closeDebugDialog(): void {
+    this.debugDialogOpen.set(false);
   }
 }

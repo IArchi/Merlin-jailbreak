@@ -877,16 +877,24 @@ export class PlaylistService {
     return lines.join('\n');
   }
 
-  private formatTreeLines(item: PlaylistItem, level = 0): string[] {
+  private formatTreeLines(item: PlaylistItem, ancestorsHasNextSibling: boolean[] = []): string[] {
     const label = this.getItemLabel(item);
     const childCount = item.children?.length ?? 0;
     const childrenSuffix = childCount > 0 ? `, children: ${childCount}` : '';
-    const prefix = level === 0 ? '' : `${'    '.repeat(Math.max(0, level - 1))}    |-- `;
+    const prefix = ancestorsHasNextSibling.length === 0
+      ? ''
+      : `${ancestorsHasNextSibling
+        .slice(0, -1)
+        .map(hasNextSibling => hasNextSibling ? '|   ' : '    ')
+        .join('')}${ancestorsHasNextSibling.at(-1) ? '|-- ' : '\-- '}`;
     const lines = [`${prefix}${label} (id: ${item.id}, order: ${item.order}${childrenSuffix})`];
 
-    for (const child of item.children ?? []) {
-      lines.push(...this.formatTreeLines(child, level + 1));
-    }
+    const children = item.children ?? [];
+
+    children.forEach((child, index) => {
+      const hasNextSibling = index < children.length - 1;
+      lines.push(...this.formatTreeLines(child, [...ancestorsHasNextSibling, hasNextSibling]));
+    });
 
     return lines;
   }

@@ -59,3 +59,16 @@
     }
   </div>
 </header>
+
+@if (debugDialogOpen()) {
+  <div class="debug-overlay" (click)="closeDebugDialog()">
+    <div class="debug-dialog" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="debug-playlist-title">
+      <div class="debug-dialog-header">
+        <h2 id="debug-playlist-title">Debug playlist.bin</h2>
+        <button class="debug-close" type="button" (click)="closeDebugDialog()" aria-label="Fermer le debug playlist.bin">×</button>
+      </div>
+
+      <pre class="debug-dialog-content">{{ playlistService.debugTreeText() }}</pre>
+    </div>
+  </div>
+}
