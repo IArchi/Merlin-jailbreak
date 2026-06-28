@@ -179,7 +179,7 @@ export class PlaylistService {
     let root: PlaylistItem | null = null;
 
     // Build hierarchy
-    itemMap.forEach(item => {
+    for (const item of itemMap.values()) {
       if (item.parent_id === 0) {
         rootCandidates.push(item.id);
         root = item;
@@ -192,7 +192,7 @@ export class PlaylistService {
           missingParents.push({ id: item.id, parent_id: item.parent_id });
         }
       }
-    });
+    }
 
     // Sort children by order
     const sortChildren = (item: PlaylistItem) => {
