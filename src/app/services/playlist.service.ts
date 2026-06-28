@@ -315,13 +315,21 @@ export class PlaylistService {
         return s;
       }
 
+      const updates: Partial<PlaylistItem> = {
+        title: sanitizedTitle
+      };
+
+      if (this.isNamedContainerType(itemToUpdate.type)) {
+        updates.type = this.getContainerTypeForTitle(sanitizedTitle);
+      }
+
       return {
         ...s,
         items: s.items.map(item => 
-          item.id === itemId ? { ...item, title: sanitizedTitle } : item
+          item.id === itemId ? { ...item, ...updates } : item
         ),
-        hierarchy: s.hierarchy ? this.updateInHierarchy(s.hierarchy, itemId, { title: sanitizedTitle }) : null,
-        selectedItem: s.selectedItem?.id === itemId ? { ...s.selectedItem, title: sanitizedTitle } : s.selectedItem,
+        hierarchy: s.hierarchy ? this.updateInHierarchy(s.hierarchy, itemId, updates) : null,
+        selectedItem: s.selectedItem?.id === itemId ? { ...s.selectedItem, ...updates } : s.selectedItem,
         isDirty: true
       };
     });
@@ -445,7 +453,7 @@ export class PlaylistService {
         order: maxOrder,
         nb_children: 0,
         fav_order: 0,
-        type: PlaylistItemType.Folder,
+        type: this.getContainerTypeForTitle(sanitizedTitle),
         limit_time: 0,
         add_time: Math.floor(Date.now() / 1000),
         uuid: crypto.randomUUID(),
@@ -715,6 +723,14 @@ export class PlaylistService {
     return type === PlaylistItemType.Root || type === PlaylistItemType.Folder || type === PlaylistItemType.Favorite;
   }
 
+  private isNamedContainerType(type: PlaylistItemType): boolean {
+    return type === PlaylistItemType.Folder || type === PlaylistItemType.Favorite;
+  }
+
+  private getContainerTypeForTitle(title: string): PlaylistItemType {
+    return title === 'Merlin_favorite' ? PlaylistItemType.Favorite : PlaylistItemType.Folder;
+  }
+
   private getTypeForImage(type: PlaylistItemType, imagePath: string): PlaylistItemType {
     if (type === PlaylistItemType.Song || type === PlaylistItemType.SongWithImage) {
       return imagePath.trim() ? PlaylistItemType.SongWithImage : PlaylistItemType.Song;
@@ -769,9 +785,27 @@ export class PlaylistService {
 
     childrenByParent.forEach(children => {
       children.sort((left, right) => left.order - right.order || left.id - right.id);
+      children.forEach((child, index) => {
+        child.order = index;
+      });
     });
 
     exportItems.forEach(item => {
+      item.fav_order = 0;
+
+      if (item.type === PlaylistItemType.Root) {
+        item.parent_id = 0;
+        item.order = 0;
+        item.limit_time = 0;
+        item.add_time = 0;
+        item.uuid = '';
+        item.title = 'Root';
+        item.imagepath = '';
+        item.soundpath = '';
+      } else if (this.isNamedContainerType(item.type)) {
+        item.type = this.getContainerTypeForTitle(item.title);
+      }
+
       const childCount = childrenByParent.get(item.id)?.length ?? 0;
       item.nb_children = this.isContainerType(item.type) ? childCount : 0;
     });
