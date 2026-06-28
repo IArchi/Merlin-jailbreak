@@ -197,13 +197,16 @@ export class PlaylistService {
 
       // Write UUID
       const uuidBytes = new TextEncoder().encode(item.uuid);
-      view.setUint8(offset + 20, uuidBytes.length);
-      uint8.set(uuidBytes.slice(0, 64), offset + 21);
+      const uuidLength = Math.min(uuidBytes.length, PlaylistService.UUID_MAX_BYTES);
+      view.setUint8(offset + 20, uuidLength);
+      uint8.set(uuidBytes.slice(0, uuidLength), offset + 21);
 
       // Write Title
-      const titleBytes = new TextEncoder().encode(item.title);
-      view.setUint8(offset + 85, titleBytes.length);
-      uint8.set(titleBytes.slice(0, 66), offset + 86);
+      const exportTitle = this.trimToMaxBytes(item.title, PlaylistService.TITLE_MAX_BYTES);
+      const titleBytes = new TextEncoder().encode(exportTitle);
+      const titleLength = Math.min(titleBytes.length, PlaylistService.TITLE_MAX_BYTES);
+      view.setUint8(offset + 85, titleLength);
+      uint8.set(titleBytes.slice(0, titleLength), offset + 86);
     });
 
     return buffer;
@@ -602,12 +605,7 @@ export class PlaylistService {
    * Get flattened items list for export
    */
   getFlattenedItems(): PlaylistItem[] {
-    return this.state().items.map(item => ({
-      ...item,
-      children: undefined,
-      expanded: undefined,
-      selected: undefined
-    }));
+    return this.prepareItemsForExport(this.state().items);
   }
 
   getChildren(parentId: number): PlaylistItem[] {
@@ -695,7 +693,10 @@ export class PlaylistService {
   }
 
   normalizeUserTitleInput(value: string): string {
-    return this.trimToMaxBytes(value, PlaylistService.USER_TITLE_MAX_BYTES);
+    return this.trimToMaxBytes(
+      this.normalizeSupportedTitleCharacters(value),
+      PlaylistService.USER_TITLE_MAX_BYTES
+    );
   }
 
   getUtf8ByteLength(value: string): number {
@@ -735,13 +736,71 @@ export class PlaylistService {
   }
 
   private sanitizeTitle(title: string): string | null {
-    const trimmedTitle = title.trim();
+    const trimmedTitle = this.normalizeSupportedTitleCharacters(title).trim();
 
     if (!trimmedTitle) {
       return null;
     }
 
     return this.trimToMaxBytes(trimmedTitle, PlaylistService.USER_TITLE_MAX_BYTES);
+  }
+
+  private normalizeSupportedTitleCharacters(value: string): string {
+    return value
+      .replace(/[\u2018\u2019\u201B\u2032]/g, "'")
+      .replace(/[\u201C\u201D\u2033]/g, '"')
+      .replace(/\u00A0/g, ' ');
+  }
+
+  private prepareItemsForExport(items: PlaylistItem[]): PlaylistItem[] {
+    const exportItems = items.map(item => ({
+      ...item,
+      children: undefined,
+      expanded: undefined,
+      selected: undefined
+    }));
+    const childrenByParent = new Map<number, PlaylistItem[]>();
+
+    exportItems.forEach(item => {
+      const siblings = childrenByParent.get(item.parent_id) ?? [];
+      siblings.push(item);
+      childrenByParent.set(item.parent_id, siblings);
+    });
+
+    childrenByParent.forEach(children => {
+      children.sort((left, right) => left.order - right.order || left.id - right.id);
+    });
+
+    exportItems.forEach(item => {
+      const childCount = childrenByParent.get(item.id)?.length ?? 0;
+      item.nb_children = this.isContainerType(item.type) ? childCount : 0;
+    });
+
+    const orderedItems: PlaylistItem[] = [];
+    const visitedIds = new Set<number>();
+
+    const visit = (item: PlaylistItem): void => {
+      if (visitedIds.has(item.id)) {
+        return;
+      }
+
+      visitedIds.add(item.id);
+      orderedItems.push(item);
+
+      for (const child of childrenByParent.get(item.id) ?? []) {
+        visit(child);
+      }
+    };
+
+    for (const rootItem of childrenByParent.get(0) ?? []) {
+      visit(rootItem);
+    }
+
+    for (const item of exportItems) {
+      visit(item);
+    }
+
+    return orderedItems;
   }
 
   private trimToMaxBytes(value: string, maxBytes: number): string {
