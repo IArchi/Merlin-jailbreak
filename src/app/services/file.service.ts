@@ -26,7 +26,7 @@ interface MissingPlaylistAsset {
 export class FileService {
   private static readonly WORKSPACE_PROGRESS_EVENT = 'workspace-progress';
   private static readonly LOG_PREFIX = '[progress]';
-  private static readonly SUPPORTED_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'bmp'];
+  private static readonly SUPPORTED_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'bmp', 'webp'];
 
   private playlistService = inject(PlaylistService);
   private progressUnlisten: Promise<UnlistenFn> | null = null;
@@ -293,7 +293,7 @@ export class FileService {
         multiple: false,
         filters: [{
           name: 'Images',
-          extensions: ['jpg', 'jpeg', 'png', 'bmp']
+          extensions: ['jpg', 'jpeg', 'png', 'bmp', 'webp']
         }]
       });
 
@@ -582,7 +582,7 @@ export class FileService {
   }
 
   private normalizeImageFileName(fileName: string): string {
-    return fileName.replace(/\.(jpeg|png|bmp)$/i, '.jpg');
+    return fileName.replace(/\.(jpeg|png|bmp|webp)$/i, '.jpg');
   }
 
   private getFileExtension(path: string): string {

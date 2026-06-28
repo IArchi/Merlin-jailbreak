@@ -25,7 +25,7 @@ fn is_supported_import_file(path: &Path) -> bool {
         .map(|ext| {
             matches!(
                 ext.to_ascii_lowercase().as_str(),
-                "mp3" | "jpg" | "jpeg" | "png" | "bmp" | "bin" | "cfg"
+                "mp3" | "jpg" | "jpeg" | "png" | "bmp" | "webp" | "bin" | "cfg"
             )
         })
         .unwrap_or(false)
@@ -38,13 +38,13 @@ fn lowercase_extension(path: &Path) -> Option<String> {
 }
 
 fn is_supported_image_extension(ext: &str) -> bool {
-    matches!(ext, "jpg" | "jpeg" | "png" | "bmp")
+    matches!(ext, "jpg" | "jpeg" | "png" | "bmp" | "webp")
 }
 
 fn normalize_image_relative_path(path: &Path) -> PathBuf {
     match lowercase_extension(path).as_deref() {
         Some("jpg") => path.to_path_buf(),
-        Some("jpeg" | "png" | "bmp") => path.with_extension("jpg"),
+        Some("jpeg" | "png" | "bmp" | "webp") => path.with_extension("jpg"),
         _ => path.to_path_buf(),
     }
 }
@@ -74,7 +74,7 @@ fn validate_workspace_copy(source: &Path, destination: &Path) -> Result<(), Stri
 
             if !is_supported {
                 return Err(format!(
-                    "L'image \"{}\" doit être au format jpg, jpeg, png ou bmp.",
+                    "L'image \"{}\" doit être au format jpg, jpeg, png, bmp ou webp.",
                     source.display()
                 ));
             }
@@ -184,6 +184,8 @@ fn encode_image_as_jpg(source: &Path, destination: &Path, resize_to_thumbnail: b
     let reader = ImageReader::open(source)
         .map_err(|e| format!("Failed to open image {}: {}", source.display(), e))?;
     let mut decoded = reader
+        .with_guessed_format()
+        .map_err(|e| format!("Failed to detect image format for {}: {}", source.display(), e))?
         .decode()
         .map_err(|e| format!("Failed to decode image {}: {}", source.display(), e))?;
 

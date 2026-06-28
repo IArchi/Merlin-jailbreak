@@ -66,7 +66,7 @@ export class ThumbnailEditorComponent {
       const imagePath = await this.fileService.selectImage();
       if (imagePath) {
         if (!this.fileService.isSupportedImagePath(imagePath)) {
-          await message('Le format de l\'image n\'est pas supporté. Utilisez un fichier jpg, jpeg, png ou bmp.', {
+          await message('Le format de l\'image n\'est pas supporté. Utilisez un fichier jpg, jpeg, png, bmp ou webp.', {
             title: 'Image invalide',
             kind: 'error',
             okLabel: 'Fermer'
