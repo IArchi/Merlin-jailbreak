@@ -98,3 +98,9 @@
     flex-wrap: wrap;
   }
 }
+
+@media (max-width: 980px) {
+  .header-actions .btn span {
+    display: none;
+  }
+}

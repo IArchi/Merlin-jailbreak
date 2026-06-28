@@ -10,6 +10,7 @@ interface SongDraft {
   providedIn: 'root'
 })
 export class PlaylistService {
+  private static readonly LOG_PREFIX = '[playlist]';
   private static readonly HEADER_SIZE = 20;
   private static readonly UUID_MAX_BYTES = 64;
   private static readonly TITLE_MAX_BYTES = 66;
@@ -45,6 +46,7 @@ export class PlaylistService {
     this.state().items.filter(item => item.type !== PlaylistItemType.Root).length
   );
   readonly maxUserTitleBytes = PlaylistService.USER_TITLE_MAX_BYTES;
+  readonly debugTreeText = computed(() => this.buildDebugReport(this.state().items, this.state().hierarchy));
 
   private readonly ITEM_SIZE = PlaylistService.TITLE_DATA_OFFSET + PlaylistService.TITLE_MAX_BYTES;
 
@@ -76,7 +78,14 @@ export class PlaylistService {
     const view = new DataView(buffer);
     let offset = 0;
 
+    this.log('parsePlaylistBin:start', {
+      byteLength: buffer.byteLength,
+      itemSize: this.ITEM_SIZE,
+      basePath
+    });
+
     while (offset + this.ITEM_SIZE <= buffer.byteLength) {
+      const recordOffset = offset;
       const item: PlaylistItem = {
         id: view.getUint16(offset, true),
         parent_id: view.getUint16(offset + 2, true),
@@ -120,6 +129,16 @@ export class PlaylistService {
       }
 
       items.push(item);
+      this.log('parsePlaylistBin:item', {
+        recordOffset,
+        id: item.id,
+        parent_id: item.parent_id,
+        order: item.order,
+        nb_children: item.nb_children,
+        type: item.type,
+        uuid: item.uuid,
+        title: item.title
+      });
       offset += this.ITEM_SIZE;
     }
 
@@ -130,6 +149,11 @@ export class PlaylistService {
       );
     }
 
+    this.log('parsePlaylistBin:complete', {
+      itemCount: items.length,
+      byteLength: buffer.byteLength
+    });
+
     return items;
   }
 
@@ -138,9 +162,16 @@ export class PlaylistService {
    */
   buildHierarchy(items: PlaylistItem[]): PlaylistItem | null {
     const itemMap = new Map<number, PlaylistItem>();
+    const duplicateIds = new Set<number>();
+    const missingParents: Array<{ id: number; parent_id: number }> = [];
+    const rootCandidates: number[] = [];
     
     // Clone items and add to map
     items.forEach(item => {
+      if (itemMap.has(item.id)) {
+        duplicateIds.add(item.id);
+      }
+
       const clonedItem = { ...item, children: [] };
       itemMap.set(item.id, clonedItem);
     });
@@ -150,12 +181,15 @@ export class PlaylistService {
     // Build hierarchy
     itemMap.forEach(item => {
       if (item.parent_id === 0) {
+        rootCandidates.push(item.id);
         root = item;
       } else {
         const parent = itemMap.get(item.parent_id);
         if (parent) {
           parent.children = parent.children || [];
           parent.children.push(item);
+        } else {
+          missingParents.push({ id: item.id, parent_id: item.parent_id });
         }
       }
     });
@@ -170,6 +204,43 @@ export class PlaylistService {
 
     if (root) {
       sortChildren(root);
+    }
+
+    const validationWarnings: string[] = [];
+
+    if (duplicateIds.size > 0) {
+      validationWarnings.push(`Duplicate ids: ${Array.from(duplicateIds).join(', ')}`);
+    }
+
+    if (rootCandidates.length > 1) {
+      validationWarnings.push(`Multiple root candidates: ${rootCandidates.join(', ')}`);
+    }
+
+    if (missingParents.length > 0) {
+      validationWarnings.push(
+        ...missingParents.map(entry => `Missing parent ${entry.parent_id} for item ${entry.id}`)
+      );
+    }
+
+    const childCountMismatches = items
+      .filter(item => this.isContainerType(item.type))
+      .map(item => ({ item, actualChildren: items.filter(candidate => candidate.parent_id === item.id).length }))
+      .filter(({ item, actualChildren }) => item.nb_children !== actualChildren)
+      .map(({ item, actualChildren }) => (
+        `Child count mismatch for item ${item.id} (${item.title || this.getItemLabel(item)}): declared=${item.nb_children}, actual=${actualChildren}`
+      ));
+
+    validationWarnings.push(...childCountMismatches);
+
+    this.log('buildHierarchy', {
+      totalItems: items.length,
+      rootId: root?.id ?? null,
+      rootTitle: root ? this.getItemLabel(root) : null,
+      warnings: validationWarnings
+    });
+
+    if (validationWarnings.length > 0) {
+      validationWarnings.forEach(warning => this.warn('buildHierarchy', warning));
     }
 
     return root;
@@ -216,6 +287,13 @@ export class PlaylistService {
    * Load playlist from file
    */
   loadPlaylist(buffer: ArrayBuffer, filePath: string, basePath: string, workspacePath: string | null = null): void {
+    this.log('loadPlaylist:start', {
+      filePath,
+      basePath,
+      workspacePath,
+      byteLength: buffer.byteLength
+    });
+
     const items = this.parsePlaylistBin(buffer, basePath);
     const hierarchy = this.buildHierarchy(items);
 
@@ -228,6 +306,13 @@ export class PlaylistService {
       workspacePath,
       isDirty: false
     });
+
+    this.log('loadPlaylist:complete', {
+      itemCount: items.length,
+      rootId: hierarchy?.id ?? null,
+      selectedItemId: null
+    });
+    console.info(`${PlaylistService.LOG_PREFIX} loadPlaylist:tree\n${this.buildDebugReport(items, hierarchy)}`);
   }
 
   /**
@@ -246,12 +331,25 @@ export class PlaylistService {
       workspacePath,
       isDirty: true
     });
+
+    this.log('createEmptyPlaylist', {
+      workspacePath,
+      rootId: root.id,
+      title: root.title
+    });
   }
 
   /**
    * Select an item
    */
   selectItem(item: PlaylistItem | null): void {
+    this.log('selectItem:request', {
+      requestedId: item?.id ?? null,
+      requestedTitle: item?.title ?? null,
+      requestedType: item?.type ?? null,
+      previousSelectedId: this.state().selectedItem?.id ?? null
+    });
+
     this.state.update(s => {
       if (!item) {
         return {
@@ -270,12 +368,23 @@ export class PlaylistService {
         selectedItem: hierarchy ? this.findInHierarchy(hierarchy, item.id) : item
       };
     });
+
+    this.log('selectItem:applied', {
+      selectedId: this.state().selectedItem?.id ?? null,
+      selectedTitle: this.state().selectedItem?.title ?? null
+    });
   }
 
   /**
    * Toggle item expansion
    */
   toggleExpand(item: PlaylistItem): void {
+    this.log('toggleExpand:request', {
+      itemId: item.id,
+      title: item.title,
+      currentExpanded: item.expanded ?? false
+    });
+
     this.state.update(s => {
       const items = s.items.map(existingItem => {
         if (existingItem.id !== item.id) {
@@ -296,6 +405,12 @@ export class PlaylistService {
         hierarchy,
         selectedItem: this.resolveSelectedItem(hierarchy, s.selectedItem)
       };
+    });
+
+    const updatedItem = this.state().items.find(existingItem => existingItem.id === item.id);
+    this.log('toggleExpand:applied', {
+      itemId: item.id,
+      expanded: updatedItem?.expanded ?? false
     });
   }
 
@@ -366,6 +481,8 @@ export class PlaylistService {
    * Move item to new parent
    */
   moveItem(itemId: number, newParentId: number, newOrder: number): void {
+    this.log('moveItem:request', { itemId, newParentId, newOrder });
+
     this.state.update(s => {
       const item = s.items.find(i => i.id === itemId);
       if (!item) return s;
@@ -431,6 +548,13 @@ export class PlaylistService {
         isDirty: true
       };
     });
+
+    const movedItem = this.state().items.find(item => item.id === itemId);
+    this.log('moveItem:applied', {
+      itemId,
+      parent_id: movedItem?.parent_id ?? null,
+      order: movedItem?.order ?? null
+    });
   }
 
   /**
@@ -484,12 +608,20 @@ export class PlaylistService {
         isDirty: true
       };
     });
+
+    this.log('createFolder', { parentId, title: sanitizedTitle });
   }
 
   createSongs(parentId: number, entries: Array<string | SongDraft>): PlaylistItem[] {
     if (entries.length === 0) {
       return [];
     }
+
+    this.log('createSongs:request', {
+      parentId,
+      count: entries.length,
+      titles: entries.map(entry => typeof entry === 'string' ? this.getFileName(entry) : (entry.title ?? this.getFileName(entry.sourcePath)))
+    });
 
     let createdSongs: PlaylistItem[] = [];
 
@@ -563,6 +695,8 @@ export class PlaylistService {
    * Delete item and its children
    */
   deleteItem(itemId: number): void {
+    this.log('deleteItem:request', { itemId });
+
     this.state.update(s => {
       const itemToDelete = s.items.find(i => i.id === itemId);
       if (!itemToDelete || itemToDelete.type === PlaylistItemType.Root) return s;
@@ -606,6 +740,12 @@ export class PlaylistService {
           : this.resolveSelectedItem(hierarchy, s.selectedItem),
         isDirty: true
       };
+    });
+
+    this.log('deleteItem:applied', {
+      itemId,
+      stillExists: this.state().items.some(item => item.id === itemId),
+      selectedId: this.state().selectedItem?.id ?? null
     });
   }
 
@@ -709,6 +849,103 @@ export class PlaylistService {
 
   getUtf8ByteLength(value: string): number {
     return new TextEncoder().encode(value).length;
+  }
+
+  private buildDebugReport(items: PlaylistItem[], hierarchy: PlaylistItem | null): string {
+    if (!hierarchy) {
+      return 'Aucune playlist chargee.';
+    }
+
+    const snapshot = this.state();
+    const lines = [
+      `file: ${snapshot.filePath ?? '(non charge)'}`,
+      `base: ${snapshot.basePath ?? '(indefini)'}`,
+      `workspace: ${snapshot.workspacePath ?? '(indefini)'}`,
+      `items: ${items.length}`,
+      `dirty: ${snapshot.isDirty}`,
+      '',
+      ...this.formatTreeLines(hierarchy)
+    ];
+
+    const warnings = this.collectDebugWarnings(items);
+
+    if (warnings.length > 0) {
+      lines.push('', 'Warnings:');
+      warnings.forEach(warning => lines.push(`- ${warning}`));
+    }
+
+    return lines.join('\n');
+  }
+
+  private formatTreeLines(item: PlaylistItem, level = 0): string[] {
+    const label = this.getItemLabel(item);
+    const childCount = item.children?.length ?? 0;
+    const childrenSuffix = childCount > 0 ? `, children: ${childCount}` : '';
+    const prefix = level === 0 ? '' : `${'    '.repeat(Math.max(0, level - 1))}    |-- `;
+    const lines = [`${prefix}${label} (id: ${item.id}, order: ${item.order}${childrenSuffix})`];
+
+    for (const child of item.children ?? []) {
+      lines.push(...this.formatTreeLines(child, level + 1));
+    }
+
+    return lines;
+  }
+
+  private collectDebugWarnings(items: PlaylistItem[]): string[] {
+    const ids = new Set<number>();
+    const duplicateIds = new Set<number>();
+    const warnings: string[] = [];
+
+    items.forEach(item => {
+      if (ids.has(item.id)) {
+        duplicateIds.add(item.id);
+      }
+
+      ids.add(item.id);
+
+      if (item.parent_id !== 0 && !items.some(candidate => candidate.id === item.parent_id)) {
+        warnings.push(`Missing parent ${item.parent_id} for item ${item.id}`);
+      }
+    });
+
+    if (duplicateIds.size > 0) {
+      warnings.push(`Duplicate ids: ${Array.from(duplicateIds).join(', ')}`);
+    }
+
+    items
+      .filter(item => this.isContainerType(item.type))
+      .forEach(item => {
+        const actualChildren = items.filter(candidate => candidate.parent_id === item.id).length;
+
+        if (actualChildren !== item.nb_children) {
+          warnings.push(
+            `Child count mismatch for item ${item.id} (${item.title || this.getItemLabel(item)}): declared=${item.nb_children}, actual=${actualChildren}`
+          );
+        }
+      });
+
+    return warnings;
+  }
+
+  private getItemLabel(item: PlaylistItem): string {
+    if (item.type === PlaylistItemType.Root) {
+      return 'Root';
+    }
+
+    return item.title.trim() || `(sans titre ${item.id})`;
+  }
+
+  private log(action: string, payload?: unknown): void {
+    if (payload === undefined) {
+      console.info(PlaylistService.LOG_PREFIX, action);
+      return;
+    }
+
+    console.info(PlaylistService.LOG_PREFIX, action, payload);
+  }
+
+  private warn(action: string, message: string): void {
+    console.warn(PlaylistService.LOG_PREFIX, action, message);
   }
 
   private resolveSelectedItem(hierarchy: PlaylistItem | null, selectedItem: PlaylistItem | null): PlaylistItem | null {

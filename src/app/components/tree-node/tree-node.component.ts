@@ -97,10 +97,26 @@ export class TreeNodeComponent implements OnDestroy, OnChanges {
 
   onToggleExpand(event: MouseEvent): void {
     event.stopPropagation();
+    console.info('[tree-node] toggleExpand', {
+      id: this.item.id,
+      title: this.item.title,
+      expanded: this.item.expanded ?? false,
+      level: this.level,
+      childCount: this.item.children?.length ?? 0
+    });
     this.playlistService.toggleExpand(this.item);
   }
 
   onSelect(): void {
+    console.info('[tree-node] select', {
+      id: this.item.id,
+      title: this.item.title,
+      type: this.item.type,
+      level: this.level,
+      parent_id: this.item.parent_id,
+      order: this.item.order,
+      childCount: this.item.children?.length ?? 0
+    });
     this.playlistService.selectItem(this.item);
     this.itemSelected.emit(this.item);
   }
@@ -112,6 +128,11 @@ export class TreeNodeComponent implements OnDestroy, OnChanges {
       return;
     }
 
+    console.info('[tree-node] createSubfolder', {
+      id: this.item.id,
+      title: this.item.title,
+      level: this.level
+    });
     this.createSubfolder.emit(this.item);
   }
 
@@ -165,6 +186,12 @@ export class TreeNodeComponent implements OnDestroy, OnChanges {
     
     try {
       const draggedItem = JSON.parse(data);
+      console.info('[tree-node] drop', {
+        targetId: this.item.id,
+        targetTitle: this.item.title,
+        position,
+        draggedItem
+      });
       
       // Prevent dropping on self
       if (draggedItem.id === this.item.id) return;

@@ -1,5 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { message } from '@tauri-apps/plugin-dialog';
 import { PlaylistService } from '../../services/playlist.service';
 import { FileService } from '../../services/file.service';
 
@@ -35,5 +36,15 @@ export class HeaderComponent {
     }
 
     this.playlistService.createFolder(hierarchy.id, 'NouveauDossier');
+  }
+
+  async onDebugPlaylist(): Promise<void> {
+    const debugText = this.playlistService.debugTreeText();
+    console.info('[debug][playlist]\n' + debugText);
+
+    await message(debugText, {
+      title: 'Debug playlist.bin',
+      kind: 'info'
+    });
   }
 }

@@ -27,6 +27,20 @@ export class AppComponent {
 
   constructor() {
     effect(() => {
+      const selectedItem = this.playlistService.selectedItem();
+      const hierarchy = this.playlistService.hierarchy();
+
+      console.info('[app][selection]', {
+        selectedId: selectedItem?.id ?? null,
+        selectedTitle: selectedItem?.title ?? null,
+        selectedType: selectedItem?.type ?? null,
+        rootId: hierarchy?.id ?? null,
+        rootTitle: hierarchy?.title ?? null,
+        totalItems: this.playlistService.items().length
+      });
+    });
+
+    effect(() => {
       const inProgress = this.fileService.operationInProgress();
       const progress = this.fileService.progress();
       const label = this.fileService.progressLabel();
