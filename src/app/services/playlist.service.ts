@@ -879,15 +879,24 @@ export class PlaylistService {
 
   private formatTreeLines(item: PlaylistItem, ancestorsHasNextSibling: boolean[] = []): string[] {
     const label = this.getItemLabel(item);
-    const childCount = item.children?.length ?? 0;
-    const childrenSuffix = childCount > 0 ? `, children: ${childCount}` : '';
     const prefix = ancestorsHasNextSibling.length === 0
       ? ''
       : `${ancestorsHasNextSibling
         .slice(0, -1)
         .map(hasNextSibling => hasNextSibling ? '|   ' : '    ')
         .join('')}${ancestorsHasNextSibling.at(-1) ? '|-- ' : '\-- '}`;
-    const lines = [`${prefix}${label} (id: ${item.id}, order: ${item.order}${childrenSuffix})`];
+    const lines = [
+      `${prefix}${label} (`
+      + `id: ${item.id}, `
+      + `parent_id: ${item.parent_id}, `
+      + `order: ${item.order}, `
+      + `nb_children: ${item.nb_children}, `
+      + `fav_order: ${item.fav_order}, `
+      + `type: ${item.type}, `
+      + `limit_time: ${item.limit_time}, `
+      + `add_time: ${item.add_time}`
+      + `)`
+    ];
 
     const children = item.children ?? [];
 
