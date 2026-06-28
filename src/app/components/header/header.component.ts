@@ -39,7 +39,7 @@ export class HeaderComponent {
   }
 
   async onDebugPlaylist(): Promise<void> {
-    const debugText = this.playlistService.debugTreeText();
+    const debugText = this.playlistService.exportDebugTreeText();
     console.info('[debug][playlist]\n' + debugText);
     this.debugDialogOpen.set(true);
   }

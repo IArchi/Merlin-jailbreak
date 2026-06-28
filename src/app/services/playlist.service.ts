@@ -47,6 +47,11 @@ export class PlaylistService {
   );
   readonly maxUserTitleBytes = PlaylistService.USER_TITLE_MAX_BYTES;
   readonly debugTreeText = computed(() => this.buildDebugReport(this.state().items, this.state().hierarchy));
+  readonly exportDebugTreeText = computed(() => {
+    const items = this.getFlattenedItems();
+    const hierarchy = this.buildHierarchy(items);
+    return this.buildDebugReport(items, hierarchy);
+  });
 
   private readonly ITEM_SIZE = PlaylistService.TITLE_DATA_OFFSET + PlaylistService.TITLE_MAX_BYTES;
 
