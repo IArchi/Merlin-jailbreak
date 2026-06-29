@@ -198,6 +198,18 @@
   white-space: nowrap;
 }
 
+.child-title-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.child-title-button:hover {
+  text-decoration: underline;
+}
+
 .child-title-input {
   min-width: 0;
   width: 100%;

@@ -167,7 +167,18 @@
                               autofocus
                             />
                           } @else {
-                            <span class="child-title">{{ child.title }}</span>
+                            @if (isAudioChild(child)) {
+                              <button
+                                type="button"
+                                class="child-title child-title-button"
+                                (click)="$event.stopPropagation(); startEditingChild(child)"
+                                title="Renommer le MP3"
+                              >
+                                {{ child.title }}
+                              </button>
+                            } @else {
+                              <span class="child-title">{{ child.title }}</span>
+                            }
                           }
                           <span class="child-badge" [class]="'child-badge ' + getChildBadgeClass(child)">{{ getChildTypeLabel(child) }}</span>
                         </div>
@@ -191,12 +202,14 @@
                         <polyline points="6,9 12,15 18,9"/>
                       </svg>
                     </button>
-                    <button class="btn btn-ghost btn-icon btn-sm" (click)="startEditingChild(child)" title="Éditer">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                      </svg>
-                    </button>
+                    @if (!isAudioChild(child)) {
+                      <button class="btn btn-ghost btn-icon btn-sm" (click)="startEditingChild(child)" title="Éditer">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                      </button>
+                    }
                     <button class="btn btn-ghost btn-icon btn-sm child-delete" (click)="onDeleteChild(child)" title="Supprimer">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="3,6 5,6 21,6"/>
