@@ -14,6 +14,15 @@ interface ResolvedAudioImportCandidate {
   imageSourcePath: string | null;
 }
 
+interface EditorAttentionPanel {
+  key: string;
+  title: string;
+  description: string;
+  actionLabel?: string;
+  actionKind?: 'apply-folder-thumbnail';
+  actionItemId?: number;
+}
+
 @Component({
   selector: 'app-editor-panel',
   standalone: true,
@@ -91,6 +100,24 @@ export class EditorPanelComponent {
 
   get hasFolderChildren(): boolean {
     return this.folderChildren.length > 0;
+  }
+
+  get attentionPanels(): EditorAttentionPanel[] {
+    const focusedItem = this.selectedTreeItem;
+    const editorItem = this.selectedItem;
+    const panels: EditorAttentionPanel[] = [];
+
+    if (focusedItem) {
+      this.appendThumbnailAttention(panels, focusedItem, focusedItem.id === editorItem?.id ? 'selected' : 'focused');
+      this.appendChildSongsThumbnailAttention(panels, focusedItem, focusedItem.id === editorItem?.id ? 'selected' : 'focused');
+    }
+
+    if (editorItem && editorItem.id !== focusedItem?.id) {
+      this.appendThumbnailAttention(panels, editorItem, 'editor');
+      this.appendChildSongsThumbnailAttention(panels, editorItem, 'editor');
+    }
+
+    return panels;
   }
 
   get maxTitleBytes(): number {
@@ -404,6 +431,118 @@ export class EditorPanelComponent {
 
   isAudioChild(child: PlaylistItem): boolean {
     return child.type === PlaylistItemType.Song || child.type === PlaylistItemType.SongWithImage;
+  }
+
+  isChildMissingThumbnail(child: PlaylistItem): boolean {
+    return this.isAudioChild(child) && this.playlistService.isItemMissingRequiredThumbnail(child);
+  }
+
+  onAttentionPanelAction(panel: EditorAttentionPanel): void {
+    if (panel.actionKind === 'apply-folder-thumbnail' && panel.actionItemId !== undefined) {
+      this.applyFolderThumbnailToMissingSongs(panel.actionItemId);
+    }
+  }
+
+  private appendThumbnailAttention(
+    panels: EditorAttentionPanel[],
+    item: PlaylistItem,
+    context: 'selected' | 'focused' | 'editor'
+  ): void {
+    if (!this.playlistService.isItemMissingRequiredThumbnail(item)) {
+      return;
+    }
+
+    panels.push({
+      key: `missing-thumbnail-${context}-${item.id}`,
+      title: 'Attention',
+      description: this.getMissingThumbnailMessage(item, context)
+    });
+  }
+
+  private appendChildSongsThumbnailAttention(
+    panels: EditorAttentionPanel[],
+    item: PlaylistItem,
+    context: 'selected' | 'focused' | 'editor'
+  ): void {
+    if (item.type !== PlaylistItemType.Folder && item.type !== PlaylistItemType.Favorite) {
+      return;
+    }
+
+    const missingSongs = this.getChildSongsMissingThumbnail(item.id);
+    const missingSongsCount = missingSongs.length;
+
+    if (missingSongsCount === 0) {
+      return;
+    }
+
+    const panel: EditorAttentionPanel = {
+      key: `missing-child-thumbnails-${context}-${item.id}`,
+      title: 'Attention',
+      description: this.getMissingChildSongsMessage(missingSongsCount)
+    };
+
+    if (item.imagepath.trim()) {
+      panel.actionLabel = 'Utiliser la vignette du dossier';
+      panel.actionKind = 'apply-folder-thumbnail';
+      panel.actionItemId = item.id;
+    }
+
+    panels.push(panel);
+  }
+
+  private applyFolderThumbnailToMissingSongs(itemId: number): void {
+    const item = this.playlistService.items().find(candidate => candidate.id === itemId);
+    const folderImagePath = item?.imagepath.trim() ?? '';
+
+    if (!item || !folderImagePath || (item.type !== PlaylistItemType.Folder && item.type !== PlaylistItemType.Favorite)) {
+      return;
+    }
+
+    this.getChildSongsMissingThumbnail(item.id)
+      .forEach(song => this.playlistService.updateItemImage(song.id, folderImagePath));
+  }
+
+  private getChildSongsMissingThumbnail(parentId: number): PlaylistItem[] {
+    return this.playlistService
+      .getChildren(parentId)
+      .filter(child => this.isAudioChild(child) && this.playlistService.isItemMissingRequiredThumbnail(child));
+  }
+
+  private getMissingThumbnailMessage(
+    item: PlaylistItem,
+    context: 'selected' | 'focused' | 'editor'
+  ): string {
+    const itemLabel = this.getAttentionItemLabel(item);
+
+    if (context === 'focused' && this.isAudioChild(item)) {
+      return `Cette ${itemLabel} n'a pas de vignette. Ajoutez-en une dans sa ligne ci-dessous avant l'export.`;
+    }
+
+    if (context === 'editor') {
+      return `Ce ${itemLabel} n'a pas de vignette. Ajoutez-en une dans l'en-tête avant l'export.`;
+    }
+
+    return `Ce ${itemLabel} n'a pas de vignette. Ajoutez-en une avant l'export.`;
+  }
+
+  private getAttentionItemLabel(item: PlaylistItem): string {
+    if (this.isAudioChild(item)) {
+      return 'histoire';
+    }
+
+    if (item.type === PlaylistItemType.Folder || item.type === PlaylistItemType.Favorite) {
+      return 'dossier';
+    }
+
+    return 'élément';
+  }
+
+  private getMissingChildSongsMessage(missingSongsCount: number): string {
+    if (missingSongsCount === 1) {
+      return "Ce dossier contient une musique sans vignette. Ajoutez-en une avant l'export.";
+    }
+
+    return `Ce dossier contient ${missingSongsCount} musiques sans vignette. Ajoutez-en une avant l'export.`;
   }
 
   private resolveEditorItem(item: PlaylistItem | null): PlaylistItem | null {

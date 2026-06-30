@@ -20,6 +20,11 @@ interface MissingPlaylistAsset {
   missingKinds: string[];
 }
 
+interface ExportCapacity {
+  required_bytes: number;
+  available_bytes: number;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -240,20 +245,31 @@ export class FileService {
         return;
       }
 
+      const items = this.playlistService.getFlattenedItems();
+      const buffer = this.playlistService.exportToBinary(items);
+      const data = Array.from(new Uint8Array(buffer));
+      const assetPaths = this.playlistService.getExportAssetPaths();
+
+      if (!(await this.ensureDestinationHasEnoughSpace(selected, data.length, assetPaths))) {
+        console.info(FileService.LOG_PREFIX, 'export cancelled due to insufficient disk space', selected);
+        return;
+      }
+
+      if (!(await this.confirmDirectSdCardExport(selected))) {
+        console.info(FileService.LOG_PREFIX, 'export cancelled after sd-card warning', selected);
+        return;
+      }
+
       console.info(FileService.LOG_PREFIX, 'export selected', selected);
       this.beginProgress('Export du dossier Merlin en cours...', 'Préparation des fichiers à copier...');
       await this.flushUi();
       console.info(FileService.LOG_PREFIX, 'export overlay painted, invoking backend');
 
-      const items = this.playlistService.getFlattenedItems();
-      const buffer = this.playlistService.exportToBinary(items);
-      const data = Array.from(new Uint8Array(buffer));
-
       await invoke<WorkspaceTransferResult>('export_workspace', {
         request: {
           destination_dir: selected,
           playlist_data: data,
-          asset_paths: this.playlistService.getExportAssetPaths()
+          asset_paths: assetPaths
         }
       });
       console.info(FileService.LOG_PREFIX, 'export backend completed');
@@ -498,6 +514,52 @@ export class FileService {
     return false;
   }
 
+  private async ensureDestinationHasEnoughSpace(destination: string, playlistSize: number, assetPaths: string[]): Promise<boolean> {
+    const capacity = await invoke<ExportCapacity>('get_export_capacity', {
+      request: {
+        destination_dir: destination,
+        playlist_size: playlistSize,
+        asset_paths: assetPaths
+      }
+    });
+
+    if (capacity.available_bytes >= capacity.required_bytes) {
+      return true;
+    }
+
+    await message(
+      [
+        'Le volume de destination ne dispose pas de suffisamment d\'espace libre pour cet export.',
+        '',
+        `Espace requis : ${this.formatBytes(capacity.required_bytes)}`,
+        `Espace disponible : ${this.formatBytes(capacity.available_bytes)}`
+      ].join('\n'),
+      {
+        title: 'Espace insuffisant',
+        kind: 'warning',
+        okLabel: 'Compris'
+      }
+    );
+
+    return false;
+  }
+
+  private async confirmDirectSdCardExport(destination: string): Promise<boolean> {
+    if (!this.isMountedVolumeRoot(destination)) {
+      return true;
+    }
+
+    return confirm(
+      'Vous avez sélectionné directement la racine de la carte SD comme destination. Faites une sauvegarde de son contenu avant de lancer l\'export pour éviter toute perte de données.',
+      {
+        title: 'Sauvegarde recommandée',
+        kind: 'warning',
+        okLabel: 'Exporter quand même',
+        cancelLabel: 'Annuler'
+      }
+    );
+  }
+
   private async handleMissingImportedAssets(): Promise<void> {
     const missingAssets = await this.getMissingImportedAssets();
 
@@ -505,7 +567,15 @@ export class FileService {
       return;
     }
 
-    const shouldRemove = await confirm(this.buildMissingAssetsMessage(missingAssets), {
+    this.clearMissingThumbnailPaths(missingAssets);
+
+    const removableAssets = missingAssets.filter(asset => asset.missingKinds.includes('mp3'));
+
+    if (removableAssets.length === 0) {
+      return;
+    }
+
+    const shouldRemove = await confirm(this.buildMissingAssetsMessage(removableAssets), {
       title: 'Fichiers manquants',
       kind: 'warning',
       okLabel: 'Supprimer',
@@ -516,7 +586,7 @@ export class FileService {
       return;
     }
 
-    missingAssets
+    removableAssets
       .map(asset => asset.itemId)
       .forEach(itemId => this.playlistService.deleteItem(itemId));
   }
@@ -578,6 +648,19 @@ export class FileService {
     ].join('\n').trim();
   }
 
+  private clearMissingThumbnailPaths(missingAssets: MissingPlaylistAsset[]): void {
+    missingAssets
+      .filter(asset => asset.missingKinds.includes('vignette'))
+      .forEach(asset => this.playlistService.updateItemAssetPaths(asset.itemId, { imagepath: '' }));
+  }
+
+  private isMountedVolumeRoot(path: string): boolean {
+    return /^\/Volumes\/[^/]+\/?$/u.test(path)
+      || /^\/[A-Za-z]:(\\)?$/u.test(path)
+      || /^[A-Za-z]:\\?$/u.test(path)
+      || /^\/(media|mnt|run\/media)\/[^/]+(?:\/[^/]+)?\/?$/u.test(path);
+  }
+
   private async findMissingPaths(paths: string[]): Promise<Set<string>> {
     const uniquePaths = Array.from(new Set(paths));
     const missingPaths = await invoke<string[]>('find_missing_paths', { paths: uniquePaths });
@@ -595,6 +678,24 @@ export class FileService {
   private getFileExtension(path: string): string {
     const extension = path.split('.').pop();
     return extension ? extension.toLowerCase() : '';
+  }
+
+  private formatBytes(value: number): string {
+    if (value <= 0) {
+      return '0 B';
+    }
+
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let size = value;
+    let unitIndex = 0;
+
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024;
+      unitIndex += 1;
+    }
+
+    const precision = unitIndex === 0 ? 0 : 1;
+    return `${size.toFixed(precision)} ${units[unitIndex]}`;
   }
 
   private async flushWorkspacePlaylistWrites(): Promise<void> {

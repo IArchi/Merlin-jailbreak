@@ -16,7 +16,7 @@ Vous pouvez télécharger les réleases depuis https://github.com/IArchi/Merlin-
  - Cliquez sur "Ouvrir une playlist".
  - Vous pouvez ajoutez/modifiez/supprimez des histoires ou des musiques.
  - Vous pouvez également créer des sous-dossiers pour les ranger.
- - Cliquez sur "Exporter vers un dossier" pour sauvegarder tous vos changements.
+ - Cliquez sur "Sauvegarder la playlist dans un dossier ou la carte SD" pour sauvegarder tous vos changements.
  - Vous pouvez ensuite copier le contenu du dossier dans la carte SD de la fabrique à histoires Merlin.
  - N'oubliez pas de l'éjecter proprement de votre ordinateur une fois terminé.
 

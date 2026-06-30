@@ -72,6 +72,36 @@
     </div>
 
     <div class="panel-content">
+      @if (attentionPanels.length > 0) {
+        <div class="attention-panels" aria-live="polite">
+          @for (panel of attentionPanels; track panel.key) {
+            <div class="attention-panel" role="alert">
+              <div class="attention-panel-icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/>
+                  <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+              </div>
+              <div class="attention-panel-body">
+                <p class="attention-panel-title">{{ panel.title }}</p>
+                <p class="attention-panel-text">{{ panel.description }}</p>
+                @if (panel.actionLabel) {
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-sm"
+                    style="align-self:flex-start;margin-top:var(--spacing-xs);border-color:rgba(146,64,14,.24);color:inherit;background:rgba(255,255,255,.45)"
+                    (click)="onAttentionPanelAction(panel)"
+                  >
+                    {{ panel.actionLabel }}
+                  </button>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      }
+
       <!-- Title Section -->
       @if (!isContainer) {
         <div class="section">
@@ -176,6 +206,19 @@
                               >
                                 {{ child.title }}
                               </button>
+                              @if (isChildMissingThumbnail(child)) {
+                                <span
+                                  class="child-warning"
+                                  title="Vignette manquante"
+                                  aria-label="Vignette manquante"
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                                    <line x1="12" y1="9" x2="12" y2="13"/>
+                                    <line x1="12" y1="17" x2="12.01" y2="17"/>
+                                  </svg>
+                                </span>
+                              }
                             } @else {
                               <span class="child-title">{{ child.title }}</span>
                             }

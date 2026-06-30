@@ -4,8 +4,12 @@ use std::path::{Path, PathBuf};
 use image::codecs::jpeg::JpegEncoder;
 use image::imageops::FilterType;
 use image::{ColorType, ImageReader};
+#[cfg(unix)]
+use libc::statvfs;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
+#[cfg(windows)]
+use windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
 
 fn should_skip_dir(path: &Path) -> bool {
     path.file_name()
@@ -275,6 +279,19 @@ struct ExportWorkspaceRequest {
     asset_paths: Vec<String>,
 }
 
+#[derive(serde::Deserialize)]
+struct ExportCapacityRequest {
+    destination_dir: String,
+    playlist_size: u64,
+    asset_paths: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct ExportCapacity {
+    required_bytes: u64,
+    available_bytes: u64,
+}
+
 #[derive(Clone)]
 struct CopyPlanEntry {
     source: PathBuf,
@@ -303,6 +320,152 @@ fn workspace_temp_root(app: &AppHandle) -> Result<PathBuf, String> {
 fn ensure_dir(path: &Path) -> Result<(), String> {
     fs::create_dir_all(path)
         .map_err(|e| format!("Failed to create directory {}: {}", path.display(), e))
+}
+
+fn available_bytes(path: &Path) -> Result<u64, String> {
+    #[cfg(unix)]
+    {
+        use std::ffi::CString;
+        use std::os::unix::ffi::OsStrExt;
+
+        let path_bytes = path.as_os_str().as_bytes();
+        let c_path = CString::new(path_bytes)
+            .map_err(|_| format!("Invalid path for free-space check: {}", path.display()))?;
+        let mut stats = std::mem::MaybeUninit::<libc::statvfs>::uninit();
+
+        let result = unsafe { statvfs(c_path.as_ptr(), stats.as_mut_ptr()) };
+        if result != 0 {
+            return Err(format!(
+                "Failed to read free space for {}: {}",
+                path.display(),
+                std::io::Error::last_os_error()
+            ));
+        }
+
+        let stats = unsafe { stats.assume_init() };
+        let fragment_size = if stats.f_frsize > 0 {
+            stats.f_frsize as u64
+        } else {
+            stats.f_bsize as u64
+        };
+
+        return Ok(fragment_size.saturating_mul(stats.f_bavail as u64));
+    }
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+
+        let wide_path = path
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect::<Vec<u16>>();
+        let mut free_bytes_available = 0_u64;
+
+        let result = unsafe {
+            GetDiskFreeSpaceExW(
+                wide_path.as_ptr(),
+                &mut free_bytes_available,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            )
+        };
+
+        if result == 0 {
+            return Err(format!(
+                "Failed to read free space for {}: {}",
+                path.display(),
+                std::io::Error::last_os_error()
+            ));
+        }
+
+        return Ok(free_bytes_available);
+    }
+
+    #[allow(unreachable_code)]
+    Err(format!(
+        "Free-space check is not supported on this platform for {}",
+        path.display()
+    ))
+}
+
+fn export_entries(workspace: &Path, asset_paths: Vec<String>) -> Result<Vec<CopyPlanEntry>, String> {
+    let mut entries = Vec::new();
+
+    if workspace.exists() {
+        for entry in fs::read_dir(workspace)
+            .map_err(|e| format!("Failed to read workspace {}: {}", workspace.display(), e))?
+        {
+            let entry = entry.map_err(|e| format!("Failed to inspect workspace entry: {}", e))?;
+            let path = entry.path();
+            let metadata = entry
+                .metadata()
+                .map_err(|e| format!("Failed to read metadata for {}: {}", path.display(), e))?;
+
+            if metadata.is_file() {
+                let extension = path
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .map(|ext| ext.to_ascii_lowercase());
+
+                if extension.as_deref() == Some("cfg") {
+                    entries.push(CopyPlanEntry {
+                        relative: PathBuf::from(entry.file_name()),
+                        source: path,
+                        size: metadata.len(),
+                    });
+                }
+            }
+        }
+    }
+
+    let mut unique_assets = std::collections::BTreeSet::new();
+    for asset_path in asset_paths {
+        if asset_path.trim().is_empty() {
+            continue;
+        }
+
+        unique_assets.insert(asset_path);
+    }
+
+    for asset_path in unique_assets {
+        let source = PathBuf::from(&asset_path);
+        if !source.exists() {
+            continue;
+        }
+
+        let metadata = source
+            .metadata()
+            .map_err(|e| format!("Failed to read metadata for {}: {}", source.display(), e))?;
+
+        if !metadata.is_file() {
+            continue;
+        }
+
+        let file_name = source
+            .file_name()
+            .ok_or_else(|| format!("Invalid asset path: {}", source.display()))?
+            .to_os_string();
+
+        entries.push(CopyPlanEntry {
+            relative: PathBuf::from(file_name),
+            source,
+            size: metadata.len(),
+        });
+    }
+
+    Ok(entries)
+}
+
+fn required_export_bytes(workspace: &Path, playlist_size: u64, asset_paths: Vec<String>) -> Result<u64, String> {
+    Ok(
+        playlist_size
+            + export_entries(workspace, asset_paths)?
+                .iter()
+                .map(|entry| entry.size)
+                .sum::<u64>(),
+    )
 }
 
 fn clear_path(path: &Path) -> Result<(), String> {
@@ -484,73 +647,21 @@ fn perform_export_workspace(app: AppHandle, request: ExportWorkspaceRequest) -> 
 
     ensure_dir(&destination)?;
 
+    let required_bytes = required_export_bytes(&workspace, request.playlist_data.len() as u64, request.asset_paths.clone())?;
+    let available_bytes = available_bytes(&destination)?;
+    if available_bytes < required_bytes {
+        return Err(format!(
+            "Espace insuffisant sur le volume de destination (requis: {} octets, disponible: {} octets).",
+            required_bytes,
+            available_bytes
+        ));
+    }
+
     let playlist_path = destination.join("playlist.bin");
     fs::write(&playlist_path, request.playlist_data)
         .map_err(|e| format!("Failed to write playlist.bin: {}", e))?;
 
-    let mut entries = Vec::new();
-
-    if workspace.exists() {
-        for entry in fs::read_dir(&workspace)
-            .map_err(|e| format!("Failed to read workspace {}: {}", workspace.display(), e))?
-        {
-            let entry = entry.map_err(|e| format!("Failed to inspect workspace entry: {}", e))?;
-            let path = entry.path();
-            let metadata = entry
-                .metadata()
-                .map_err(|e| format!("Failed to read metadata for {}: {}", path.display(), e))?;
-
-            if metadata.is_file() {
-                let extension = path
-                    .extension()
-                    .and_then(|ext| ext.to_str())
-                    .map(|ext| ext.to_ascii_lowercase());
-
-                if extension.as_deref() == Some("cfg") {
-                    entries.push(CopyPlanEntry {
-                        relative: PathBuf::from(entry.file_name()),
-                        source: path,
-                        size: metadata.len(),
-                    });
-                }
-            }
-        }
-    }
-
-    let mut unique_assets = std::collections::BTreeSet::new();
-    for asset_path in request.asset_paths {
-        if asset_path.trim().is_empty() {
-            continue;
-        }
-
-        unique_assets.insert(asset_path);
-    }
-
-    for asset_path in unique_assets {
-        let source = PathBuf::from(&asset_path);
-        if !source.exists() {
-            continue;
-        }
-
-        let metadata = source
-            .metadata()
-            .map_err(|e| format!("Failed to read metadata for {}: {}", source.display(), e))?;
-
-        if !metadata.is_file() {
-            continue;
-        }
-
-        let file_name = source
-            .file_name()
-            .ok_or_else(|| format!("Invalid asset path: {}", source.display()))?
-            .to_os_string();
-
-        entries.push(CopyPlanEntry {
-            relative: PathBuf::from(file_name),
-            source,
-            size: metadata.len(),
-        });
-    }
+    let entries = export_entries(&workspace, request.asset_paths)?;
 
     let (total_files, total_bytes) = copy_plan_to_dir(&app, "export", &entries, &destination)?;
 
@@ -855,6 +966,21 @@ async fn import_workspace(app: AppHandle, source_dir: String) -> Result<Workspac
 }
 
 #[tauri::command]
+fn get_export_capacity(app: AppHandle, request: ExportCapacityRequest) -> Result<ExportCapacity, String> {
+    let destination = PathBuf::from(&request.destination_dir);
+    ensure_dir(&destination)?;
+
+    let workspace = workspace_root(&app)?;
+    let required_bytes = required_export_bytes(&workspace, request.playlist_size, request.asset_paths)?;
+    let available_bytes = available_bytes(&destination)?;
+
+    Ok(ExportCapacity {
+        required_bytes,
+        available_bytes,
+    })
+}
+
+#[tauri::command]
 async fn export_workspace(app: AppHandle, request: ExportWorkspaceRequest) -> Result<WorkspaceTransferResult, String> {
     tauri::async_runtime::spawn_blocking(move || perform_export_workspace(app, request))
         .await
@@ -920,6 +1046,7 @@ pub fn run() {
             copy_file_to_workspace,
             import_workspace,
             export_workspace,
+            get_export_capacity,
             write_playlist_file,
             write_workspace_playlist,
             read_asset_file,
