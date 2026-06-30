@@ -121,7 +121,6 @@ export class FileService {
 
     await appWindow.onCloseRequested(async event => {
       if (this.isClosing) {
-        event.preventDefault();
         return;
       }
 
@@ -133,12 +132,12 @@ export class FileService {
       event.preventDefault();
 
       const shouldDelete = await confirm(
-        'Voulez-vous supprimer le dossier importé avant de fermer l\'application ?',
+        'Le dossier importé est encore conservé dans l\'application.\n\nSupprimer et fermer : efface ce dossier maintenant.\nFermer sans supprimer : le dossier sera conservé et pourra être rouvert au prochain lancement.',
         {
           title: 'Fermer Merlin JailBreak',
           kind: 'warning',
           okLabel: 'Supprimer et fermer',
-          cancelLabel: 'Conserver et fermer'
+          cancelLabel: 'Fermer sans supprimer'
         }
       );
 
@@ -153,6 +152,14 @@ export class FileService {
       } catch (error) {
         this.isClosing = false;
         console.error('Error while closing application:', error);
+        await message(
+          this.getErrorMessage(error, 'La fermeture de l\'application a échoué.'),
+          {
+            title: 'Fermeture impossible',
+            kind: 'error',
+            okLabel: 'Fermer'
+          }
+        );
       }
     });
   }
