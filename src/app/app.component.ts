@@ -1,4 +1,4 @@
-import { Component, OnDestroy, effect, inject } from '@angular/core';
+import { Component, HostListener, effect, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HeaderComponent } from './components/header/header.component';
 import { SidebarComponent } from './components/sidebar/sidebar.component';
@@ -59,6 +59,11 @@ export class AppComponent {
 
     void this.fileService.initializeWorkspaceRecovery();
     void this.fileService.installCloseHandler();
+  }
+
+  @HostListener('document:contextmenu', ['$event'])
+  preventContextMenu(event: MouseEvent): void {
+    event.preventDefault();
   }
 
   ngOnDestroy(): void {
