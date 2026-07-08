@@ -299,6 +299,12 @@ struct CopyPlanEntry {
     size: u64,
 }
 
+#[derive(Clone)]
+struct ExistingExportEntry {
+    path: PathBuf,
+    size: u64,
+}
+
 const WORKSPACE_DIR_NAME: &str = "import";
 const TEMP_WORKSPACE_DIR_NAME: &str = "import.tmp";
 const WORKSPACE_PROGRESS_EVENT: &str = "workspace-progress";
@@ -466,6 +472,63 @@ fn required_export_bytes(workspace: &Path, playlist_size: u64, asset_paths: Vec<
                 .map(|entry| entry.size)
                 .sum::<u64>(),
     )
+}
+
+fn is_previous_export_file(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name.eq_ignore_ascii_case("playlist.bin"))
+        .unwrap_or(false)
+        || matches!(
+            lowercase_extension(path).as_deref(),
+            Some("mp3" | "jpg" | "jpeg" | "png" | "bmp" | "webp" | "cfg")
+        )
+}
+
+fn previous_export_entries(destination: &Path) -> Result<Vec<ExistingExportEntry>, String> {
+    if !destination.exists() || !destination.is_dir() {
+        return Ok(Vec::new());
+    }
+
+    let mut entries = Vec::new();
+
+    for entry in fs::read_dir(destination)
+        .map_err(|e| format!("Failed to read directory {}: {}", destination.display(), e))?
+    {
+        let entry = entry.map_err(|e| format!("Failed to inspect directory entry: {}", e))?;
+        let path = entry.path();
+        let metadata = entry
+            .metadata()
+            .map_err(|e| format!("Failed to read metadata for {}: {}", path.display(), e))?;
+
+        if !metadata.is_file() || !is_previous_export_file(&path) {
+            continue;
+        }
+
+        entries.push(ExistingExportEntry {
+            path,
+            size: metadata.len(),
+        });
+    }
+
+    Ok(entries)
+}
+
+fn reclaimable_export_bytes(destination: &Path) -> Result<u64, String> {
+    Ok(previous_export_entries(destination)?
+        .iter()
+        .map(|entry| entry.size)
+        .sum())
+}
+
+fn clear_previous_export_content(destination: &Path) -> Result<u64, String> {
+    let entries = previous_export_entries(destination)?;
+
+    for entry in &entries {
+        clear_path(&entry.path)?;
+    }
+
+    Ok(entries.iter().map(|entry| entry.size).sum())
 }
 
 fn clear_path(path: &Path) -> Result<(), String> {
@@ -648,12 +711,26 @@ fn perform_export_workspace(app: AppHandle, request: ExportWorkspaceRequest) -> 
     ensure_dir(&destination)?;
 
     let required_bytes = required_export_bytes(&workspace, request.playlist_data.len() as u64, request.asset_paths.clone())?;
-    let available_bytes = available_bytes(&destination)?;
-    if available_bytes < required_bytes {
+    let available_before_cleanup = available_bytes(&destination)?;
+    let reclaimable_bytes = reclaimable_export_bytes(&destination)?;
+    let effective_available_bytes = available_before_cleanup.saturating_add(reclaimable_bytes);
+
+    if effective_available_bytes < required_bytes {
         return Err(format!(
             "Espace insuffisant sur le volume de destination (requis: {} octets, disponible: {} octets).",
             required_bytes,
-            available_bytes
+            effective_available_bytes
+        ));
+    }
+
+    clear_previous_export_content(&destination)?;
+
+    let available_after_cleanup = available_bytes(&destination)?;
+    if available_after_cleanup < required_bytes {
+        return Err(format!(
+            "Espace insuffisant sur le volume de destination (requis: {} octets, disponible: {} octets).",
+            required_bytes,
+            available_after_cleanup
         ));
     }
 
@@ -972,12 +1049,57 @@ fn get_export_capacity(app: AppHandle, request: ExportCapacityRequest) -> Result
 
     let workspace = workspace_root(&app)?;
     let required_bytes = required_export_bytes(&workspace, request.playlist_size, request.asset_paths)?;
-    let available_bytes = available_bytes(&destination)?;
+    let available_bytes = available_bytes(&destination)?
+        .saturating_add(reclaimable_export_bytes(&destination)?);
 
     Ok(ExportCapacity {
         required_bytes,
         available_bytes,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_temp_dir() -> PathBuf {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time before unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("merlin-export-test-{}-{}", std::process::id(), suffix))
+    }
+
+    #[test]
+    fn clear_previous_export_content_only_removes_previous_export_files_at_root() {
+        let temp_dir = unique_temp_dir();
+        fs::create_dir_all(&temp_dir).expect("create temp dir");
+
+        let playlist = temp_dir.join("playlist.bin");
+        let song = temp_dir.join("track.mp3");
+        let image = temp_dir.join("cover.jpg");
+        let note = temp_dir.join("notes.txt");
+        let nested_dir = temp_dir.join("nested");
+        let nested_image = nested_dir.join("nested-cover.jpg");
+
+        fs::write(&playlist, vec![0_u8; 11]).expect("write playlist");
+        fs::write(&song, vec![0_u8; 17]).expect("write song");
+        fs::write(&image, vec![0_u8; 23]).expect("write image");
+        fs::write(&note, b"keep me").expect("write note");
+        fs::create_dir_all(&nested_dir).expect("create nested dir");
+        fs::write(&nested_image, vec![0_u8; 31]).expect("write nested image");
+
+        let removed_bytes = clear_previous_export_content(&temp_dir).expect("clear previous export content");
+        assert_eq!(removed_bytes, 11 + 17 + 23);
+        assert!(!playlist.exists());
+        assert!(!song.exists());
+        assert!(!image.exists());
+        assert!(note.exists());
+        assert!(nested_image.exists());
+
+        fs::remove_dir_all(&temp_dir).expect("remove temp dir");
+    }
 }
 
 #[tauri::command]
