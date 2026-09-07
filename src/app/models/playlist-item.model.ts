@@ -86,4 +86,5 @@ export interface AudioImportCandidate {
   source_path: string;
   title: string;
   image_source_path: string | null;
+  image_data: number[] | null;
 }
