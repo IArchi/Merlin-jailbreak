@@ -12,6 +12,7 @@ interface ResolvedAudioImportCandidate {
   sourcePath: string;
   title: string;
   imageSourcePath: string | null;
+  imageData: number[] | null;
 }
 
 interface EditorAttentionPanel {
@@ -225,12 +226,19 @@ export class EditorPanelComponent {
         createdSongs.map(song => song.soundpath)
       );
       const sourceToWorkspace = new Map(importedFiles.map(file => [file.sourcePath, file.workspacePath]));
-      const imageImports = await this.fileService.importImagesToWorkspace(
-        createdSongs.flatMap((song, index) => {
-          const imageSourcePath = candidates[index]?.imageSourcePath;
-          return imageSourcePath ? [{ itemId: song.id, sourcePath: imageSourcePath }] : [];
-        })
-      );
+      const imageEntries: Array<{ itemId: number; sourcePath?: string; data?: number[] }> = [];
+      createdSongs.forEach((song, index) => {
+        const imageSourcePath = candidates[index]?.imageSourcePath;
+        const imageData = candidates[index]?.imageData;
+
+        if (imageSourcePath) {
+          imageEntries.push({ itemId: song.id, sourcePath: imageSourcePath });
+        } else if (imageData) {
+          imageEntries.push({ itemId: song.id, data: imageData });
+        }
+      });
+
+      const imageImports = await this.fileService.importImagesToWorkspace(imageEntries);
       const songIdToImagePath = new Map(imageImports.map(file => [file.itemId, file.workspacePath]));
 
       createdSongs.forEach((song, index) => {
@@ -265,10 +273,16 @@ export class EditorPanelComponent {
 
   private async selectAudioImportCandidatesFromFiles(): Promise<ResolvedAudioImportCandidate[]> {
     const filePaths = await this.fileService.selectAudioFiles();
-    return filePaths.map(filePath => ({
-      sourcePath: filePath,
-      title: filePath.split(/[/\\]/).pop()?.replace(/\.mp3$/i, '') || 'Piste audio',
-      imageSourcePath: null
+    if (filePaths.length === 0) {
+      return [];
+    }
+
+    const scanned = await this.fileService.scanAudioImportFiles(filePaths);
+    return scanned.map((candidate: AudioImportCandidate) => ({
+      sourcePath: candidate.source_path,
+      title: candidate.title,
+      imageSourcePath: candidate.image_source_path,
+      imageData: candidate.image_data
     }));
   }
 
@@ -283,7 +297,8 @@ export class EditorPanelComponent {
       const candidates: ResolvedAudioImportCandidate[] = scanned.map((candidate: AudioImportCandidate) => ({
         sourcePath: candidate.source_path,
         title: candidate.title,
-        imageSourcePath: candidate.image_source_path
+        imageSourcePath: candidate.image_source_path,
+        imageData: candidate.image_data
       }));
 
       if (candidates.length === 0) {

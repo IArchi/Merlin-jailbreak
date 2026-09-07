@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use image::codecs::jpeg::JpegEncoder;
 use image::imageops::FilterType;
 use image::{ColorType, ImageReader};
+use id3::{Tag, TagLike};
 #[cfg(unix)]
 use libc::statvfs;
 use serde::Serialize;
@@ -108,6 +109,21 @@ fn is_supported_image_file(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
+fn read_audio_metadata(path: &Path) -> (Option<String>, Option<Vec<u8>>) {
+    let Ok(tag) = Tag::read_from_path(path) else {
+        return (None, None);
+    };
+
+    let title = tag
+        .title()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    let image_data = tag.pictures().next().map(|picture| picture.data.clone());
+
+    (title, image_data)
+}
+
 fn sorted_dir_paths(path: &Path) -> Result<Vec<PathBuf>, String> {
     let mut entries = fs::read_dir(path)
         .map_err(|e| format!("Failed to read directory {}: {}", path.display(), e))?
@@ -158,23 +174,25 @@ fn collect_audio_album_imports(path: &Path, imports: &mut Vec<AudioImportCandida
         }
 
         if let (Some(mp3_path), Some(image_path)) = (mp3_files.first(), image_files.first()) {
-            let title = entry
+            let (tag_title, image_data) = read_audio_metadata(mp3_path);
+            let folder_title = entry
                 .file_name()
                 .and_then(|name| name.to_str())
                 .map(|name| name.trim().to_string())
-                .filter(|name| !name.is_empty())
-                .unwrap_or_else(|| {
+                .filter(|name| !name.is_empty());
+            let title = tag_title.unwrap_or_else(|| folder_title.unwrap_or_else(|| {
                     mp3_path
                         .file_stem()
                         .and_then(|name| name.to_str())
                         .map(|name| name.to_string())
                         .unwrap_or_else(|| "Piste audio".to_string())
-                });
+                }));
 
             imports.push(AudioImportCandidate {
                 source_path: mp3_path.to_string_lossy().to_string(),
                 title,
                 image_source_path: Some(image_path.to_string_lossy().to_string()),
+                image_data,
             });
         }
 
@@ -204,6 +222,27 @@ fn encode_image_as_jpg(source: &Path, destination: &Path, resize_to_thumbnail: b
     encoder
         .encode(&rgb, rgb.width(), rgb.height(), ColorType::Rgb8.into())
         .map_err(|e| format!("Failed to encode image {} as jpg: {}", source.display(), e))?;
+
+    fs::write(destination, &encoded)
+        .map_err(|e| format!("Failed to write destination file {}: {}", destination.display(), e))?;
+
+    Ok(encoded.len() as u64)
+}
+
+fn encode_image_data_as_jpg(data: &[u8], destination: &Path, resize_to_thumbnail: bool) -> Result<u64, String> {
+    let mut decoded = image::load_from_memory(data)
+        .map_err(|e| format!("Failed to decode embedded image: {}", e))?;
+
+    if resize_to_thumbnail {
+        decoded = decoded.resize_to_fill(128, 128, FilterType::Lanczos3);
+    }
+
+    let rgb = decoded.to_rgb8();
+    let mut encoded = Vec::new();
+    let mut encoder = JpegEncoder::new_with_quality(&mut encoded, 90);
+    encoder
+        .encode(&rgb, rgb.width(), rgb.height(), ColorType::Rgb8.into())
+        .map_err(|e| format!("Failed to encode embedded image as jpg: {}", e))?;
 
     fs::write(destination, &encoded)
         .map_err(|e| format!("Failed to write destination file {}: {}", destination.display(), e))?;
@@ -270,6 +309,7 @@ struct AudioImportCandidate {
     source_path: String,
     title: String,
     image_source_path: Option<String>,
+    image_data: Option<Vec<u8>>,
 }
 
 #[derive(serde::Deserialize)]
@@ -979,23 +1019,54 @@ fn scan_audio_import_directory(source_dir: String) -> Result<Vec<AudioImportCand
             continue;
         }
 
-        let title = entry
+        let (tag_title, image_data) = read_audio_metadata(&entry);
+        let title = tag_title.unwrap_or_else(|| entry
             .file_stem()
             .and_then(|name| name.to_str())
             .map(|name| name.trim().to_string())
             .filter(|name| !name.is_empty())
-            .unwrap_or_else(|| "Piste audio".to_string());
+            .unwrap_or_else(|| "Piste audio".to_string()));
 
         imports.push(AudioImportCandidate {
             source_path: entry.to_string_lossy().to_string(),
             title,
             image_source_path: None,
+            image_data,
         });
     }
 
     collect_audio_album_imports(&root, &mut imports)?;
 
     Ok(imports)
+}
+
+#[tauri::command]
+fn scan_audio_import_files(source_paths: Vec<String>) -> Result<Vec<AudioImportCandidate>, String> {
+    source_paths
+        .into_iter()
+        .map(|source_path| {
+            let path = PathBuf::from(&source_path);
+            if !path.is_file() || !is_mp3_file(&path) {
+                return Err(format!("Le fichier audio n'est pas un MP3 valide: {}", path.display()));
+            }
+
+            let (tag_title, image_data) = read_audio_metadata(&path);
+            let title = tag_title.unwrap_or_else(|| {
+                path.file_stem()
+                    .and_then(|name| name.to_str())
+                    .map(|name| name.trim().to_string())
+                    .filter(|name| !name.is_empty())
+                    .unwrap_or_else(|| "Piste audio".to_string())
+            });
+
+            Ok(AudioImportCandidate {
+                source_path,
+                title,
+                image_source_path: None,
+                image_data,
+            })
+        })
+        .collect()
 }
 
 #[tauri::command]
@@ -1020,6 +1091,25 @@ fn copy_file_to_workspace(
 
     copy_asset_to_path_with_options(&source, &destination, resize_image)?;
 
+    Ok(destination.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn write_image_to_workspace(
+    app: AppHandle,
+    file_name: String,
+    data: Vec<u8>,
+    resize_image: bool,
+) -> Result<String, String> {
+    let root = workspace_root(&app)?;
+    ensure_dir(&root)?;
+
+    let destination = root.join(file_name);
+    if let Some(parent) = destination.parent() {
+        ensure_dir(parent)?;
+    }
+
+    encode_image_data_as_jpg(&data, &destination, resize_image)?;
     Ok(destination.to_string_lossy().to_string())
 }
 
@@ -1165,7 +1255,9 @@ pub fn run() {
             reopen_workspace,
             clear_workspace,
             scan_audio_import_directory,
+            scan_audio_import_files,
             copy_file_to_workspace,
+            write_image_to_workspace,
             import_workspace,
             export_workspace,
             get_export_capacity,

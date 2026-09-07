@@ -384,6 +384,15 @@ export class FileService {
     }
   }
 
+  async scanAudioImportFiles(sourcePaths: string[]): Promise<AudioImportCandidate[]> {
+    try {
+      return await invoke<AudioImportCandidate[]>('scan_audio_import_files', { sourcePaths });
+    } catch (error) {
+      console.error('Error scanning audio import files:', error);
+      throw error;
+    }
+  }
+
   async importAudioToWorkspace(filePaths: string[], targetPaths: string[]): Promise<Array<{ sourcePath: string; workspacePath: string }>> {
     const imported: Array<{ sourcePath: string; workspacePath: string }> = [];
 
@@ -408,15 +417,17 @@ export class FileService {
     return imported;
   }
 
-  async importImagesToWorkspace(entries: Array<{ itemId: number; sourcePath: string }>): Promise<Array<{ itemId: number; workspacePath: string }>> {
+  async importImagesToWorkspace(entries: Array<{ itemId: number; sourcePath?: string; data?: number[] }>): Promise<Array<{ itemId: number; workspacePath: string }>> {
     const imported: Array<{ itemId: number; workspacePath: string }> = [];
 
     for (const entry of entries) {
-      if (!entry.sourcePath) {
+      if (!entry.sourcePath && !entry.data) {
         continue;
       }
 
-      const workspacePath = await this.copyImageToWorkspace(entry.itemId, entry.sourcePath);
+      const workspacePath = entry.sourcePath
+        ? await this.copyImageToWorkspace(entry.itemId, entry.sourcePath)
+        : await this.writeImageToWorkspace(entry.itemId, entry.data!);
       imported.push({ itemId: entry.itemId, workspacePath });
     }
 
@@ -438,6 +449,25 @@ export class FileService {
     return invoke<string>('copy_file_to_workspace', {
       sourcePath,
       fileName,
+      resizeImage: true
+    });
+  }
+
+  async writeImageToWorkspace(itemId: number, data: number[]): Promise<string> {
+    const item = this.playlistService.items().find(candidate => candidate.id === itemId);
+    const workspaceRoot = this.playlistService.workspacePath();
+
+    if (!item || !workspaceRoot) {
+      throw new Error('Image workspace path is not available');
+    }
+
+    const fileName = this.normalizeImageFileName(
+      item.imagepath ? await basename(item.imagepath) : `${item.uuid}.jpg`
+    );
+
+    return invoke<string>('write_image_to_workspace', {
+      fileName,
+      data,
       resizeImage: true
     });
   }
